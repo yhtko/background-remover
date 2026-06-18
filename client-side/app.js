@@ -82,10 +82,13 @@ function setTool(tool) {
 }
 
 function updateCanvasCursor() {
+  const cursor = currentTool === "pan" ? "grab" : "pointer";
   if (rightButtonPanning) {
     interactionCanvas.style.cursor = "grabbing";
+    viewport.style.cursor = "grabbing";
   } else {
-    interactionCanvas.style.cursor = currentTool === "pan" ? "grab" : "pointer";
+    interactionCanvas.style.cursor = cursor;
+    viewport.style.cursor = cursor;
   }
 }
 
@@ -424,9 +427,12 @@ function clearPolygon() {
 
 function canvasPoint(event) {
   const rect = interactionCanvas.getBoundingClientRect();
+  const rawX = (event.clientX - rect.left) * (interactionCanvas.width / rect.width);
+  const rawY = (event.clientY - rect.top) * (interactionCanvas.height / rect.height);
   return {
-    x: clamp(Math.floor((event.clientX - rect.left) * (interactionCanvas.width / rect.width)), 0, state.width - 1),
-    y: clamp(Math.floor((event.clientY - rect.top) * (interactionCanvas.height / rect.height)), 0, state.height - 1)
+    x: clamp(Math.floor(rawX), 0, state.width - 1),
+    y: clamp(Math.floor(rawY), 0, state.height - 1),
+    inside: rawX >= 0 && rawX < state.width && rawY >= 0 && rawY < state.height
   };
 }
 
@@ -597,6 +603,10 @@ function isTypingTarget(target) {
   return target.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
+function isCanvasControlTarget(target) {
+  return Boolean(target.closest?.("button, select, input, .view-switch, .canvas-actions, .canvas-zoom, .canvas-rotate"));
+}
+
 async function exportPng() {
   if (!state) return;
   const blob = await createOutputBlob(exportBackground.value);
@@ -748,8 +758,9 @@ viewport.addEventListener("wheel", (event) => {
   zoomAtViewportPoint(event.clientX - rect.left, event.clientY - rect.top, zoom * factor);
 }, { passive: false });
 
-interactionCanvas.addEventListener("pointermove", (event) => {
+viewport.addEventListener("pointermove", (event) => {
   if (!state) return;
+  if (isCanvasControlTarget(event.target) && !dragging) return;
   const point = canvasPoint(event);
   if (dragging && (currentTool === "pan" || rightButtonPanning)) {
     panX += event.clientX - lastPointer.x;
@@ -773,7 +784,7 @@ interactionCanvas.addEventListener("pointermove", (event) => {
     }
     return;
   }
-  if (currentTool === "toggle") {
+  if (currentTool === "toggle" && point.inside) {
     const label = state.labelMap[point.y * state.width + point.x];
     highlightLabel(label);
     const info = state.labels[label];
@@ -781,9 +792,10 @@ interactionCanvas.addEventListener("pointermove", (event) => {
   }
 });
 
-interactionCanvas.addEventListener("pointerdown", (event) => {
+viewport.addEventListener("pointerdown", (event) => {
   if (!state) return;
-  interactionCanvas.setPointerCapture(event.pointerId);
+  if (isCanvasControlTarget(event.target)) return;
+  viewport.setPointerCapture(event.pointerId);
   dragging = true;
   lastPointer = { x: event.clientX, y: event.clientY };
   if (event.button === 2) {
@@ -802,32 +814,33 @@ interactionCanvas.addEventListener("pointerdown", (event) => {
     dragging = false;
     return;
   }
-  if (currentTool === "toggle") {
+  if (currentTool === "toggle" && point.inside) {
     toggleLabel(state.labelMap[point.y * state.width + point.x]);
     dragging = false;
     return;
   }
 });
 
-interactionCanvas.addEventListener("pointerup", (event) => {
+viewport.addEventListener("pointerup", () => {
   if (!state) return;
   dragging = false;
   rightButtonPanning = false;
   updateCanvasCursor();
 });
 
-interactionCanvas.addEventListener("dblclick", () => {
+viewport.addEventListener("dblclick", (event) => {
+  if (isCanvasControlTarget(event.target)) return;
   if (currentTool === "polyFg") applyPolygon("fg");
   if (currentTool === "polyBg") applyPolygon("bg");
 });
 
-interactionCanvas.addEventListener("pointercancel", () => {
+viewport.addEventListener("pointercancel", () => {
   dragging = false;
   rightButtonPanning = false;
   updateCanvasCursor();
 });
 
-interactionCanvas.addEventListener("contextmenu", (event) => {
+viewport.addEventListener("contextmenu", (event) => {
   event.preventDefault();
 });
 
