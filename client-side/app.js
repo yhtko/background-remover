@@ -621,7 +621,7 @@ async function createOutputBlob(bg) {
 
 function outputScale(width, height) {
   const preset = outputSize.value;
-  const maxLongSide = preset === "light" ? 900 : preset === "standard" ? 1400 : Infinity;
+  const maxLongSide = preset === "light" ? 600 : preset === "standard" ? 900 : Infinity;
   if (!Number.isFinite(maxLongSide)) return 1;
   return Math.min(1, maxLongSide / Math.max(width, height));
 }
