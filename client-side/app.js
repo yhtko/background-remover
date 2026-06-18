@@ -47,7 +47,7 @@ const tempCanvas = document.createElement("canvas");
 const tempCtx = tempCanvas.getContext("2d", { willReadFrequently: true });
 
 let state = null;
-let currentTool = "toggle";
+let currentTool = "pan";
 let previewMode = "compare";
 let rotationAngle = 0;
 let zoom = 1;
@@ -134,6 +134,7 @@ async function loadFile(file) {
     resetView();
     renderAll();
     setControlsEnabled(true);
+    setTool("pan");
     setStatus("処理完了", 100);
     showToast("背景削除が完了しました。");
   } catch (error) {
@@ -446,6 +447,24 @@ function updateHistoryButtons() {
   redoButton.disabled = !state || state.redo.length === 0;
 }
 
+function undoMaskEdit() {
+  if (!state || !state.history.length) return;
+  state.redo.push(new Uint8ClampedArray(state.alphaMask));
+  state.alphaMask = state.history.pop();
+  relabel();
+  renderAll();
+  updateHistoryButtons();
+}
+
+function redoMaskEdit() {
+  if (!state || !state.redo.length) return;
+  state.history.push(new Uint8ClampedArray(state.alphaMask));
+  state.alphaMask = state.redo.pop();
+  relabel();
+  renderAll();
+  updateHistoryButtons();
+}
+
 function resetView() {
   if (!state) return;
   const bounds = viewportBounds();
@@ -565,6 +584,17 @@ function normalizeAngle(angle) {
   if (normalized > 180) normalized -= 360;
   if (normalized <= -180) normalized += 360;
   return normalized;
+}
+
+function applyCurrentPolygon() {
+  if (currentTool === "polyFg") applyPolygon("fg");
+  if (currentTool === "polyBg") applyPolygon("bg");
+}
+
+function isTypingTarget(target) {
+  if (!target) return false;
+  const tag = target.tagName;
+  return target.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
 async function exportPng() {
@@ -802,31 +832,14 @@ interactionCanvas.addEventListener("contextmenu", (event) => {
 });
 
 showBoundary.addEventListener("change", renderBoundary);
-undoButton.addEventListener("click", () => {
-  if (!state || !state.history.length) return;
-  state.redo.push(new Uint8ClampedArray(state.alphaMask));
-  state.alphaMask = state.history.pop();
-  relabel();
-  renderAll();
-  updateHistoryButtons();
-});
-redoButton.addEventListener("click", () => {
-  if (!state || !state.redo.length) return;
-  state.history.push(new Uint8ClampedArray(state.alphaMask));
-  state.alphaMask = state.redo.pop();
-  relabel();
-  renderAll();
-  updateHistoryButtons();
-});
+undoButton.addEventListener("click", undoMaskEdit);
+redoButton.addEventListener("click", redoMaskEdit);
 relabelButton.addEventListener("click", () => {
   relabel();
   renderAll();
   showToast("島を再計算しました。");
 });
-applyPolygonButton.addEventListener("click", () => {
-  if (currentTool === "polyFg") applyPolygon("fg");
-  if (currentTool === "polyBg") applyPolygon("bg");
-});
+applyPolygonButton.addEventListener("click", applyCurrentPolygon);
 undoPointButton.addEventListener("click", () => {
   polygonPoints.pop();
   renderInteraction();
@@ -843,4 +856,31 @@ saveButton.addEventListener("click", exportPng);
 window.addEventListener("resize", () => {
   if (!state) return;
   resetView();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (isTypingTarget(event.target)) return;
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    setTool("pan");
+    return;
+  }
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+    event.preventDefault();
+    undoMaskEdit();
+    return;
+  }
+
+  if (event.key === "Enter" && (currentTool === "polyFg" || currentTool === "polyBg")) {
+    event.preventDefault();
+    applyCurrentPolygon();
+    return;
+  }
+
+  if (event.key === "Delete" && (currentTool === "polyFg" || currentTool === "polyBg")) {
+    event.preventDefault();
+    clearPolygon();
+  }
 });
