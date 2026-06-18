@@ -167,31 +167,6 @@ h1 {
   font-weight: 700;
 }
 
-.settings {
-  display: grid;
-  gap: 8px;
-}
-
-.settings label {
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.endpoint-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-}
-
-.endpoint-row input {
-  min-width: 0;
-  height: 38px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-}
-
 .message {
   min-height: 22px;
   color: var(--muted);

@@ -2,13 +2,10 @@
   const MAX_FILE_SIZE = 5 * 1024 * 1024;
   const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg"]);
   const CONFIG = window.BACKGROUND_REMOVER_CONFIG || {};
-  const STORAGE_KEY = "background-remover-api-endpoint";
 
   const fileInput = document.getElementById("fileInput");
   const selectButton = document.getElementById("selectButton");
   const dropZone = document.getElementById("dropZone");
-  const apiEndpoint = document.getElementById("apiEndpoint");
-  const saveEndpoint = document.getElementById("saveEndpoint");
   const message = document.getElementById("message");
   const resultImage = document.getElementById("resultImage");
   const emptyState = document.getElementById("emptyState");
@@ -19,8 +16,6 @@
   let resultUrl = "";
   let resultFileName = "background-removed.png";
 
-  apiEndpoint.value = localStorage.getItem(STORAGE_KEY) || CONFIG.apiEndpoint || "";
-
   function setMessage(text, type) {
     message.textContent = text;
     message.className = type ? `message ${type}` : "message";
@@ -28,7 +23,6 @@
 
   function setBusy(isBusy) {
     selectButton.disabled = isBusy;
-    saveEndpoint.disabled = isBusy;
     downloadButton.disabled = isBusy || !resultUrl;
     dropZone.setAttribute("aria-busy", String(isBusy));
   }
@@ -41,7 +35,7 @@
   }
 
   function getEndpoint() {
-    return apiEndpoint.value.trim();
+    return String(CONFIG.apiEndpoint || "").trim();
   }
 
   function makeDownloadName(fileName) {
@@ -58,8 +52,7 @@
 
     const endpoint = getEndpoint();
     if (!endpoint) {
-      setMessage("Cloud Run API URL を入力してください。", "error");
-      apiEndpoint.focus();
+      setMessage("API URL が未設定です。管理者に確認してください。", "error");
       return;
     }
 
@@ -129,12 +122,6 @@
     event.preventDefault();
     dropZone.classList.remove("dragging");
     removeBackground(event.dataTransfer.files[0]);
-  });
-
-  saveEndpoint.addEventListener("click", () => {
-    const endpoint = getEndpoint();
-    localStorage.setItem(STORAGE_KEY, endpoint);
-    setMessage(endpoint ? "API URLを保存しました。" : "API URLを空にしました。", "success");
   });
 
   downloadButton.addEventListener("click", () => {
