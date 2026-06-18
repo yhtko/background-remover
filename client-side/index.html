@@ -14,6 +14,21 @@
         <h1>Client-side Product Photo Cleaner</h1>
         <p class="subtitle">画像をサーバーへ送らず、ブラウザ内で背景除去とマスク修正を行います。</p>
       </div>
+      <div class="canvas-output">
+        <select id="exportBackground" aria-label="書き出し背景">
+          <option value="transparent">透明PNG</option>
+          <option value="white">白背景PNG</option>
+          <option value="black">黒背景PNG</option>
+          <option value="gray">検査グレーPNG</option>
+        </select>
+        <select id="outputSize" aria-label="コピー/保存サイズ">
+          <option value="high">高画質</option>
+          <option value="standard" selected>標準</option>
+          <option value="light">軽量</option>
+        </select>
+        <button id="copyButton" type="button" disabled>コピー</button>
+        <button id="saveButton" type="button" disabled>PNG保存</button>
+      </div>
     </header>
 
     <section class="layout">
@@ -61,24 +76,6 @@
       </aside>
 
       <section class="workspace">
-        <div class="workspace-bar">
-          <div class="canvas-output">
-            <select id="exportBackground" aria-label="書き出し背景">
-              <option value="transparent">透明PNG</option>
-              <option value="white">白背景PNG</option>
-              <option value="black">黒背景PNG</option>
-              <option value="gray">検査グレーPNG</option>
-            </select>
-            <select id="outputSize" aria-label="コピー/保存サイズ">
-              <option value="high">高画質</option>
-              <option value="standard" selected>標準</option>
-              <option value="light">軽量</option>
-            </select>
-            <button id="copyButton" type="button" disabled>コピー</button>
-            <button id="saveButton" type="button" disabled>PNG保存</button>
-          </div>
-        </div>
-
         <div id="toast" class="toast" hidden></div>
 
         <div id="canvasViewport" class="canvas-viewport checker">

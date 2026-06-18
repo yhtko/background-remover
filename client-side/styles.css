@@ -102,15 +102,6 @@ h1 {
   min-width: 0;
 }
 
-.workspace {
-  position: relative;
-}
-
-.workspace-bar {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .panel,
 .canvas-viewport {
   border: 1px solid var(--border);
@@ -325,6 +316,7 @@ h1 {
 
 .canvas-output {
   display: inline-flex;
+  flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -459,6 +451,11 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .canvas-viewport {
     min-height: 560px;
   }
@@ -468,10 +465,6 @@ h1 {
   .canvas-zoom,
   .canvas-rotate {
     max-width: calc(100% - 24px);
-  }
-
-  .workspace-bar {
-    justify-content: flex-start;
   }
 
   .view-switch button,
