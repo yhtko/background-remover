@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>背景削除ツール</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Tools</p>
+        <h1>背景削除ツール</h1>
+      </div>
+      <a class="portal-link" href="../" aria-label="Toolsポータルへ戻る">Tools</a>
+    </header>
+
+    <section class="workspace" aria-label="背景削除">
+      <div class="upload-pane">
+        <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="画像を選択">
+          <input id="fileInput" type="file" accept="image/png,image/jpeg" hidden>
+          <div class="upload-icon" aria-hidden="true">PNG</div>
+          <h2>画像をアップロード</h2>
+          <p>PNG / JPG / JPEG、最大 5MB</p>
+          <button id="selectButton" type="button">ファイルを選択</button>
+        </div>
+
+        <div class="settings">
+          <label for="apiEndpoint">Cloud Run API URL</label>
+          <div class="endpoint-row">
+            <input id="apiEndpoint" type="url" placeholder="https://your-service.run.app/remove-background">
+            <button id="saveEndpoint" type="button">保存</button>
+          </div>
+        </div>
+
+        <div id="message" class="message" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="preview-pane">
+        <div class="preview-toolbar">
+          <div class="segmented" aria-label="プレビュー背景">
+            <button type="button" class="active" data-preview-bg="checker">市松</button>
+            <button type="button" data-preview-bg="white">白</button>
+            <button type="button" data-preview-bg="black">黒</button>
+          </div>
+          <button id="downloadButton" class="download" type="button" disabled>PNG保存</button>
+        </div>
+
+        <div id="previewStage" class="preview-stage checker">
+          <div id="emptyState" class="empty-state">
+            <strong>透過PNGのプレビュー</strong>
+            <span>処理後の画像がここに表示されます。</span>
+          </div>
+          <img id="resultImage" alt="背景削除結果" hidden>
+        </div>
+      </div>
+    </section>
+
+    <section class="details" aria-label="利用条件">
+      <div>
+        <span>制限</span>
+        <strong>5MB / PNG・JPG・JPEG</strong>
+      </div>
+      <div>
+        <span>回数</span>
+        <strong>1分 3回</strong>
+      </div>
+      <div>
+        <span>出力</span>
+        <strong>透過PNG</strong>
+      </div>
+      <div>
+        <span>保存</span>
+        <strong>アップロード画像は保存しません</strong>
+      </div>
+    </section>
+  </main>
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
