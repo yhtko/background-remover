@@ -26,6 +26,7 @@ const exportBackground = document.getElementById("exportBackground");
 const zoomOutButton = document.getElementById("zoomOutButton");
 const zoomResetButton = document.getElementById("zoomResetButton");
 const zoomInButton = document.getElementById("zoomInButton");
+const copyButton = document.getElementById("copyButton");
 const saveButton = document.getElementById("saveButton");
 const viewport = document.getElementById("canvasViewport");
 const stack = document.getElementById("canvasStack");
@@ -73,7 +74,7 @@ function updateCanvasCursor() {
 }
 
 function setControlsEnabled(enabled) {
-  [relabelButton, zoomOutButton, zoomResetButton, zoomInButton, saveButton].forEach((button) => {
+  [relabelButton, zoomOutButton, zoomResetButton, zoomInButton, copyButton, saveButton].forEach((button) => {
     button.disabled = !enabled;
   });
   updateHistoryButtons();
@@ -469,7 +470,34 @@ function zoomAtViewportPoint(viewportX, viewportY, nextZoom) {
 
 async function exportPng() {
   if (!state) return;
-  const bg = exportBackground.value;
+  const blob = await createOutputBlob(exportBackground.value);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = state.fileName.replace(/\.[^.]+$/, "_client_clean.png");
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function copyTransparentPng() {
+  if (!state) return;
+  if (!navigator.clipboard || !window.ClipboardItem) {
+    setStatus("このブラウザは画像のクリップボードコピーに対応していません。");
+    return;
+  }
+  try {
+    const blob = await createOutputBlob("transparent");
+    await navigator.clipboard.write([
+      new ClipboardItem({ "image/png": blob })
+    ]);
+    setStatus("透過PNGをクリップボードへコピーしました。PowerPointやExcelへ貼り付けできます。");
+  } catch (error) {
+    console.error(error);
+    setStatus("クリップボードへのコピーに失敗しました。ブラウザの権限設定を確認してください。");
+  }
+}
+
+async function createOutputBlob(bg) {
   tempCanvas.width = state.width;
   tempCanvas.height = state.height;
   tempCtx.clearRect(0, 0, state.width, state.height);
@@ -483,13 +511,7 @@ async function exportPng() {
   tempCtx.drawImage(outputCanvas, 0, 0);
   previewMode = previousMode;
   renderOutput();
-  const blob = await canvasToBlob(tempCanvas, "image/png");
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = state.fileName.replace(/\.[^.]+$/, "_client_clean.png");
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return canvasToBlob(tempCanvas, "image/png");
 }
 
 function canvasToBlob(canvas, type) {
@@ -662,6 +684,7 @@ clearPolygonButton.addEventListener("click", clearPolygon);
 zoomOutButton.addEventListener("click", () => zoomAtCenter(zoom / 1.25));
 zoomInButton.addEventListener("click", () => zoomAtCenter(zoom * 1.25));
 zoomResetButton.addEventListener("click", resetView);
+copyButton.addEventListener("click", copyTransparentPng);
 saveButton.addEventListener("click", exportPng);
 window.addEventListener("resize", () => {
   if (!state) return;
