@@ -27,9 +27,8 @@ const exportBackground = document.getElementById("exportBackground");
 const zoomOutButton = document.getElementById("zoomOutButton");
 const zoomResetButton = document.getElementById("zoomResetButton");
 const zoomInButton = document.getElementById("zoomInButton");
-const rotateLeftButton = document.getElementById("rotateLeftButton");
+const rotateButtons = document.querySelectorAll("[data-rotate]");
 const rotateAngleLabel = document.getElementById("rotateAngleLabel");
-const rotateRightButton = document.getElementById("rotateRightButton");
 const copyButton = document.getElementById("copyButton");
 const saveButton = document.getElementById("saveButton");
 const viewport = document.getElementById("canvasViewport");
@@ -79,7 +78,7 @@ function updateCanvasCursor() {
 }
 
 function setControlsEnabled(enabled) {
-  [relabelButton, zoomOutButton, zoomResetButton, zoomInButton, rotateLeftButton, rotateRightButton, copyButton, saveButton].forEach((button) => {
+  [relabelButton, zoomOutButton, zoomResetButton, zoomInButton, ...rotateButtons, copyButton, saveButton].forEach((button) => {
     button.disabled = !enabled;
   });
   updateHistoryButtons();
@@ -478,9 +477,10 @@ function zoomAtViewportPoint(viewportX, viewportY, nextZoom) {
 function rotateCurrentImage(degrees) {
   if (!state) return;
   clearPolygon();
-  const rotatedOriginal = rotateImageData(state.originalImageData, degrees, true);
-  const rotatedConfidence = rotateAlphaArray(state.confidenceMap, state.width, state.height, degrees, true);
-  const rotatedMask = rotateAlphaArray(state.alphaMask, state.width, state.height, degrees, true);
+  const smooth = Math.abs(degrees) % 90 !== 0;
+  const rotatedOriginal = rotateImageData(state.originalImageData, degrees, smooth);
+  const rotatedConfidence = rotateAlphaArray(state.confidenceMap, state.width, state.height, degrees, smooth);
+  const rotatedMask = rotateAlphaArray(state.alphaMask, state.width, state.height, degrees, smooth);
   state.originalImageData = rotatedOriginal.imageData;
   state.confidenceMap = rotatedConfidence.alpha;
   state.alphaMask = rotatedMask.alpha.map((alpha) => (alpha >= 128 ? 255 : 0));
@@ -495,7 +495,7 @@ function rotateCurrentImage(degrees) {
   resetView();
   renderAll();
   updateHistoryButtons();
-  setStatus(`${degrees > 0 ? "右" : "左"}に1°回転しました。`);
+  setStatus(`${degrees > 0 ? "右" : "左"}に${Math.abs(degrees)}°回転しました。`);
 }
 
 function rotateImageData(imageData, degrees, smooth) {
@@ -808,8 +808,9 @@ clearPolygonButton.addEventListener("click", clearPolygon);
 zoomOutButton.addEventListener("click", () => zoomAtCenter(zoom / 1.25));
 zoomInButton.addEventListener("click", () => zoomAtCenter(zoom * 1.25));
 zoomResetButton.addEventListener("click", resetView);
-rotateLeftButton.addEventListener("click", () => rotateCurrentImage(-1));
-rotateRightButton.addEventListener("click", () => rotateCurrentImage(1));
+rotateButtons.forEach((button) => {
+  button.addEventListener("click", () => rotateCurrentImage(Number(button.dataset.rotate)));
+});
 copyButton.addEventListener("click", copyTransparentPng);
 saveButton.addEventListener("click", exportPng);
 window.addEventListener("resize", () => {

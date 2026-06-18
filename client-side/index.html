@@ -102,9 +102,13 @@
           </div>
 
           <div class="canvas-rotate" aria-label="回転操作">
-            <button id="rotateLeftButton" type="button" disabled>-1°</button>
+            <button type="button" data-rotate="-90" disabled>-90°</button>
+            <button type="button" data-rotate="-45" disabled>-45°</button>
+            <button type="button" data-rotate="-1" disabled>-1°</button>
             <span id="rotateAngleLabel" class="rotate-angle">0°</span>
-            <button id="rotateRightButton" type="button" disabled>+1°</button>
+            <button type="button" data-rotate="1" disabled>+1°</button>
+            <button type="button" data-rotate="45" disabled>+45°</button>
+            <button type="button" data-rotate="90" disabled>+90°</button>
           </div>
 
           <div id="canvasStack" class="canvas-stack">
