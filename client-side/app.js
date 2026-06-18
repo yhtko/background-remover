@@ -5,6 +5,7 @@ const HISTORY_LIMIT = 12;
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 10;
 const INITIAL_ALPHA_THRESHOLD = 128;
+const OUTPUT_PADDING = 12;
 
 const fileInput = document.getElementById("fileInput");
 const selectButton = document.getElementById("selectButton");
@@ -498,20 +499,59 @@ async function copyTransparentPng() {
 }
 
 async function createOutputBlob(bg) {
-  tempCanvas.width = state.width;
-  tempCanvas.height = state.height;
-  tempCtx.clearRect(0, 0, state.width, state.height);
+  const bounds = alphaBounds(OUTPUT_PADDING);
+  const outputWidth = bounds.x2 - bounds.x1 + 1;
+  const outputHeight = bounds.y2 - bounds.y1 + 1;
+  tempCanvas.width = outputWidth;
+  tempCanvas.height = outputHeight;
+  tempCtx.clearRect(0, 0, outputWidth, outputHeight);
   if (bg !== "transparent") {
     tempCtx.fillStyle = bg === "black" ? "#111827" : bg === "gray" ? "#8f99a8" : "#ffffff";
-    tempCtx.fillRect(0, 0, state.width, state.height);
+    tempCtx.fillRect(0, 0, outputWidth, outputHeight);
   }
   const previousMode = previewMode;
   previewMode = "checker";
   renderOutput();
-  tempCtx.drawImage(outputCanvas, 0, 0);
+  tempCtx.drawImage(
+    outputCanvas,
+    bounds.x1,
+    bounds.y1,
+    outputWidth,
+    outputHeight,
+    0,
+    0,
+    outputWidth,
+    outputHeight
+  );
   previewMode = previousMode;
   renderOutput();
   return canvasToBlob(tempCanvas, "image/png");
+}
+
+function alphaBounds(padding = 0) {
+  let x1 = state.width;
+  let y1 = state.height;
+  let x2 = -1;
+  let y2 = -1;
+  for (let y = 0; y < state.height; y += 1) {
+    for (let x = 0; x < state.width; x += 1) {
+      const alpha = state.alphaMask[y * state.width + x];
+      if (alpha < 8) continue;
+      if (x < x1) x1 = x;
+      if (x > x2) x2 = x;
+      if (y < y1) y1 = y;
+      if (y > y2) y2 = y;
+    }
+  }
+  if (x2 < x1 || y2 < y1) {
+    return { x1: 0, y1: 0, x2: state.width - 1, y2: state.height - 1 };
+  }
+  return {
+    x1: clamp(x1 - padding, 0, state.width - 1),
+    y1: clamp(y1 - padding, 0, state.height - 1),
+    x2: clamp(x2 + padding, 0, state.width - 1),
+    y2: clamp(y2 + padding, 0, state.height - 1)
+  };
 }
 
 function canvasToBlob(canvas, type) {
