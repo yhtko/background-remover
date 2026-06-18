@@ -9,6 +9,7 @@ const dropZone = document.getElementById("dropZone");
 const statusText = document.getElementById("statusText");
 const progressBar = document.getElementById("progressBar");
 const toolButtons = document.querySelectorAll("[data-tool]");
+const previewButtons = document.querySelectorAll("[data-preview]");
 const thresholdSlider = document.getElementById("thresholdSlider");
 const thresholdValue = document.getElementById("thresholdValue");
 const showBoundary = document.getElementById("showBoundary");
@@ -19,7 +20,6 @@ const relabelButton = document.getElementById("relabelButton");
 const applyPolygonButton = document.getElementById("applyPolygonButton");
 const undoPointButton = document.getElementById("undoPointButton");
 const clearPolygonButton = document.getElementById("clearPolygonButton");
-const previewBackground = document.getElementById("previewBackground");
 const exportBackground = document.getElementById("exportBackground");
 const zoomOutButton = document.getElementById("zoomOutButton");
 const zoomResetButton = document.getElementById("zoomResetButton");
@@ -30,16 +30,17 @@ const stack = document.getElementById("canvasStack");
 const outputCanvas = document.getElementById("outputCanvas");
 const boundaryCanvas = document.getElementById("boundaryCanvas");
 const interactionCanvas = document.getElementById("interactionCanvas");
+const emptyState = document.getElementById("emptyState");
+
 const outputCtx = outputCanvas.getContext("2d");
 const boundaryCtx = boundaryCanvas.getContext("2d");
 const interactionCtx = interactionCanvas.getContext("2d");
-const emptyState = document.getElementById("emptyState");
-
 const tempCanvas = document.createElement("canvas");
 const tempCtx = tempCanvas.getContext("2d", { willReadFrequently: true });
 
-let currentTool = "toggle";
 let state = null;
+let currentTool = "toggle";
+let previewMode = "compare";
 let zoom = 1;
 let panX = 0;
 let panY = 0;
@@ -61,10 +62,11 @@ function setTool(tool) {
 }
 
 function setControlsEnabled(enabled) {
-  [undoButton, redoButton, relabelButton, zoomOutButton, zoomResetButton, zoomInButton, saveButton].forEach((button) => {
+  [relabelButton, zoomOutButton, zoomResetButton, zoomInButton, saveButton].forEach((button) => {
     button.disabled = !enabled;
   });
   updateHistoryButtons();
+  updatePolygonButtons();
 }
 
 async function loadFile(file) {
@@ -74,6 +76,7 @@ async function loadFile(file) {
   }
 
   setControlsEnabled(false);
+  clearPolygon();
   setStatus("画像を読み込んでいます。", 8);
 
   try {
@@ -87,21 +90,20 @@ async function loadFile(file) {
       labels: [],
       history: [],
       redo: [],
-      selectedRect: null,
       width: prepared.imageData.width,
       height: prepared.imageData.height
     };
 
     sizeCanvases(state.width, state.height);
-    setStatus("ブラウザ内モデルで背景を除去しています。初回は少し時間がかかります。", 22);
+    setStatus("ブラウザ内モデルで背景を削除しています。初回は少し時間がかかります。", 24);
     const removedBlob = await removeBackground(prepared.blob);
-    setStatus("アルファマスクを作成しています。", 74);
+    setStatus("マスクを作成しています。", 74);
     await initializeMaskFromBlob(removedBlob);
     relabel();
     resetView();
     renderAll();
     setControlsEnabled(true);
-    setStatus("完了しました。島をクリックして前景/背景を切り替えられます。", 100);
+    setStatus("完了しました。点で囲んで戻す/消す、または島を切替できます。", 100);
   } catch (error) {
     console.error(error);
     setStatus(`処理に失敗しました: ${error.message || error}`, 0);
@@ -131,9 +133,9 @@ async function initializeMaskFromBlob(blob) {
   tempCtx.drawImage(bitmap, 0, 0, state.width, state.height);
   bitmap.close();
   const removed = tempCtx.getImageData(0, 0, state.width, state.height);
+  const threshold = Number(thresholdSlider.value);
   state.confidenceMap = new Uint8ClampedArray(state.width * state.height);
   state.alphaMask = new Uint8ClampedArray(state.width * state.height);
-  const threshold = Number(thresholdSlider.value);
   for (let i = 0, p = 0; i < removed.data.length; i += 4, p += 1) {
     const alpha = removed.data[i + 3];
     state.confidenceMap[p] = alpha;
@@ -207,16 +209,15 @@ function renderOutput() {
   if (!state) return;
   const source = state.originalImageData.data;
   const output = outputCtx.createImageData(state.width, state.height);
-  const mode = previewBackground.value;
 
-  if (mode === "original") {
+  if (previewMode === "original") {
     output.data.set(source);
     outputCtx.putImageData(output, 0, 0);
     return;
   }
 
   for (let i = 0, p = 0; i < source.length; i += 4, p += 1) {
-    if (mode === "compare") {
+    if (previewMode === "compare") {
       const kept = state.alphaMask[p] >= 128;
       output.data[i] = kept ? source[i] : Math.round(source[i] * 0.34 + 255 * 0.66);
       output.data[i + 1] = kept ? source[i + 1] : Math.round(source[i + 1] * 0.34 + 255 * 0.66);
@@ -234,7 +235,7 @@ function renderOutput() {
 
 function renderBoundary() {
   boundaryCtx.clearRect(0, 0, boundaryCanvas.width, boundaryCanvas.height);
-  if (!state || !showBoundary.checked) return;
+  if (!state || !showBoundary.checked || previewMode === "original") return;
   const image = boundaryCtx.createImageData(state.width, state.height);
   for (let y = 1; y < state.height - 1; y += 1) {
     for (let x = 1; x < state.width - 1; x += 1) {
@@ -255,17 +256,13 @@ function renderBoundary() {
   boundaryCtx.putImageData(image, 0, 0);
 }
 
-function clearInteraction() {
-  interactionCtx.clearRect(0, 0, interactionCanvas.width, interactionCanvas.height);
-}
-
 function renderInteraction() {
-  clearInteraction();
+  interactionCtx.clearRect(0, 0, interactionCanvas.width, interactionCanvas.height);
   drawPolygonGuide();
 }
 
 function highlightLabel(label) {
-  clearInteraction();
+  interactionCtx.clearRect(0, 0, interactionCanvas.width, interactionCanvas.height);
   if (!state || !label) return;
   const image = interactionCtx.createImageData(state.width, state.height);
   for (let p = 0; p < state.labelMap.length; p += 1) {
@@ -328,7 +325,7 @@ function toggleLabel(label) {
   if (!info) return;
   const total = state.width * state.height;
   if (info.kind === "bg" && info.count > total * 0.35) {
-    setStatus("大きな背景領域です。矩形選択で必要範囲だけ前景化してください。");
+    setStatus("大きな背景領域です。必要な部分だけ点で囲んで戻してください。");
     return;
   }
   pushHistory();
@@ -338,10 +335,10 @@ function toggleLabel(label) {
   }
   relabel();
   renderAll();
-  setStatus(info.kind === "fg" ? "選択した島を透明化しました。" : "選択した島を復元しました。");
+  setStatus(info.kind === "fg" ? "選択した島を消しました。" : "選択した島を戻しました。");
 }
 
-function applyRect(rect, mode) {
+function applyRectThreshold(rect) {
   if (!state || !rect) return;
   const x1 = clamp(Math.floor(Math.min(rect.x, rect.x + rect.w)), 0, state.width - 1);
   const x2 = clamp(Math.ceil(Math.max(rect.x, rect.x + rect.w)), 0, state.width - 1);
@@ -352,19 +349,18 @@ function applyRect(rect, mode) {
   for (let y = y1; y <= y2; y += 1) {
     for (let x = x1; x <= x2; x += 1) {
       const p = y * state.width + x;
-      if (mode === "fg") state.alphaMask[p] = 255;
-      else if (mode === "bg") state.alphaMask[p] = 0;
-      else state.alphaMask[p] = state.confidenceMap[p] >= threshold ? 255 : 0;
+      state.alphaMask[p] = state.confidenceMap[p] >= threshold ? 255 : 0;
     }
   }
   relabel();
   renderAll();
-  setStatus("選択範囲を更新しました。");
+  setStatus("選択範囲のしきい値を更新しました。");
 }
 
 function applyPolygon(mode) {
   if (!state || polygonPoints.length < 3) return;
   const bounds = polygonBounds(polygonPoints);
+  const targetAlpha = mode === "bg" ? 0 : 255;
   pushHistory();
   for (let y = bounds.y1; y <= bounds.y2; y += 1) {
     const intersections = polygonIntersections(y + 0.5, polygonPoints);
@@ -372,44 +368,14 @@ function applyPolygon(mode) {
       const xStart = clamp(Math.floor(intersections[i]), 0, state.width - 1);
       const xEnd = clamp(Math.ceil(intersections[i + 1]), 0, state.width - 1);
       for (let x = xStart; x <= xEnd; x += 1) {
-        const p = y * state.width + x;
-        if (mode === "bg") {
-          state.alphaMask[p] = 0;
-        } else if (shouldRestorePixel(x, y, p)) {
-          state.alphaMask[p] = 255;
-        }
+        state.alphaMask[y * state.width + x] = targetAlpha;
       }
     }
   }
   relabel();
   renderAll();
   clearPolygon();
-  setStatus(mode === "fg" ? "囲んだ範囲から部品らしい部分を戻しました。" : "囲んだ範囲を消しました。");
-}
-
-function shouldRestorePixel(x, y, p) {
-  if (state.alphaMask[p] >= 250) return false;
-  const confidence = state.confidenceMap[p];
-  return confidence > 18 || originalHasDetail(x, y);
-}
-
-function originalHasDetail(x, y) {
-  if (x <= 0 || y <= 0 || x >= state.width - 1 || y >= state.height - 1) return false;
-  const data = state.originalImageData.data;
-  const index = (y * state.width + x) * 4;
-  const r = data[index];
-  const g = data[index + 1];
-  const b = data[index + 2];
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const saturation = max - min;
-  const left = (y * state.width + x - 1) * 4;
-  const right = (y * state.width + x + 1) * 4;
-  const up = ((y - 1) * state.width + x) * 4;
-  const down = ((y + 1) * state.width + x) * 4;
-  const horizontal = Math.abs(data[left] - data[right]) + Math.abs(data[left + 1] - data[right + 1]) + Math.abs(data[left + 2] - data[right + 2]);
-  const vertical = Math.abs(data[up] - data[down]) + Math.abs(data[up + 1] - data[down + 1]) + Math.abs(data[up + 2] - data[down + 2]);
-  return saturation > 16 || Math.max(horizontal, vertical) > 42;
+  setStatus(mode === "fg" ? "囲んだ内側をすべて戻しました。" : "囲んだ内側をすべて消しました。");
 }
 
 function polygonBounds(points) {
@@ -516,7 +482,12 @@ async function exportPng() {
     tempCtx.fillStyle = bg === "black" ? "#111827" : bg === "gray" ? "#8f99a8" : "#ffffff";
     tempCtx.fillRect(0, 0, state.width, state.height);
   }
+  const previousMode = previewMode;
+  previewMode = "checker";
+  renderOutput();
   tempCtx.drawImage(outputCanvas, 0, 0);
+  previewMode = previousMode;
+  renderOutput();
   const blob = await canvasToBlob(tempCanvas, "image/png");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -558,6 +529,15 @@ toolButtons.forEach((button) => {
   button.addEventListener("click", () => setTool(button.dataset.tool));
 });
 
+previewButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    previewMode = button.dataset.preview;
+    previewButtons.forEach((item) => item.classList.toggle("active", item === button));
+    viewport.className = `canvas-viewport ${["original", "compare"].includes(previewMode) ? "checker" : previewMode}`;
+    renderAll();
+  });
+});
+
 interactionCanvas.addEventListener("pointermove", (event) => {
   if (!state) return;
   const point = canvasPoint(event);
@@ -568,7 +548,7 @@ interactionCanvas.addEventListener("pointermove", (event) => {
     applyTransform();
     return;
   }
-  if (dragging && dragStart) {
+  if (dragging && dragStart && currentTool === "threshold") {
     drawSelectionRect({ x: dragStart.x, y: dragStart.y, w: point.x - dragStart.x, h: point.y - dragStart.y });
     return;
   }
@@ -591,7 +571,7 @@ interactionCanvas.addEventListener("pointermove", (event) => {
     const label = state.labelMap[point.y * state.width + point.x];
     highlightLabel(label);
     const info = state.labels[label];
-    labelInfo.textContent = info ? `島: ${label} / ${info.kind === "fg" ? "前景" : "背景"} / ${info.count}px` : `島: -`;
+    labelInfo.textContent = info ? `島: ${label} / ${info.kind === "fg" ? "前景" : "背景"} / ${info.count}px` : "島: -";
   }
 });
 
@@ -612,19 +592,15 @@ interactionCanvas.addEventListener("pointerdown", (event) => {
     dragging = false;
     return;
   }
-  dragStart = point;
+  if (currentTool === "threshold") dragStart = point;
 });
 
 interactionCanvas.addEventListener("pointerup", (event) => {
   if (!state) return;
-  if (dragging && dragStart && currentTool !== "pan" && currentTool !== "toggle") {
+  if (dragging && dragStart && currentTool === "threshold") {
     const point = canvasPoint(event);
     const rect = { x: dragStart.x, y: dragStart.y, w: point.x - dragStart.x, h: point.y - dragStart.y };
-    if (Math.abs(rect.w) > 2 && Math.abs(rect.h) > 2) {
-      if (currentTool === "rectFg") applyRect(rect, "fg");
-      if (currentTool === "rectBg") applyRect(rect, "bg");
-      if (currentTool === "threshold") applyRect(rect, "threshold");
-    }
+    if (Math.abs(rect.w) > 2 && Math.abs(rect.h) > 2) applyRectThreshold(rect);
   }
   dragging = false;
   dragStart = null;
@@ -643,13 +619,7 @@ interactionCanvas.addEventListener("pointercancel", () => {
 thresholdSlider.addEventListener("input", () => {
   thresholdValue.textContent = thresholdSlider.value;
 });
-
 showBoundary.addEventListener("change", renderBoundary);
-previewBackground.addEventListener("change", () => {
-  const mode = previewBackground.value;
-  viewport.className = `canvas-viewport ${["original", "compare"].includes(mode) ? "checker" : mode}`;
-  renderAll();
-});
 undoButton.addEventListener("click", () => {
   if (!state || !state.history.length) return;
   state.redo.push(new Uint8ClampedArray(state.alphaMask));
@@ -680,11 +650,7 @@ undoPointButton.addEventListener("click", () => {
   renderInteraction();
 });
 clearPolygonButton.addEventListener("click", clearPolygon);
-zoomOutButton.addEventListener("click", () => {
-  zoomAtCenter(zoom / 1.25);
-});
-zoomInButton.addEventListener("click", () => {
-  zoomAtCenter(zoom * 1.25);
-});
+zoomOutButton.addEventListener("click", () => zoomAtCenter(zoom / 1.25));
+zoomInButton.addEventListener("click", () => zoomAtCenter(zoom * 1.25));
 zoomResetButton.addEventListener("click", resetView);
 saveButton.addEventListener("click", exportPng);
