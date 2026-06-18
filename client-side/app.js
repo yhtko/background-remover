@@ -70,7 +70,7 @@ function showToast(message) {
   window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => {
     toast.hidden = true;
-  }, 2600);
+  }, 2000);
 }
 
 function setTool(tool) {
@@ -99,7 +99,7 @@ function setControlsEnabled(enabled) {
 
 async function loadFile(file) {
   if (!file || !/^image\/(png|jpeg)$/.test(file.type)) {
-    setStatus("PNG / JPG / JPEG を選択してください。");
+    showToast("PNG / JPG / JPEG を選択してください。");
     return;
   }
 
@@ -125,7 +125,7 @@ async function loadFile(file) {
     rotateAngleLabel.textContent = "0°";
 
     sizeCanvases(state.width, state.height);
-    setStatus("ブラウザ内モデルで背景を削除しています。初回は少し時間がかかります。", 24);
+    setStatus("ブラウザ内モデルで背景を削除しています。", 24);
     const removedBlob = await removeBackground(prepared.blob);
     setStatus("マスクを作成しています。", 74);
     await initializeMaskFromBlob(removedBlob);
@@ -134,10 +134,12 @@ async function loadFile(file) {
     resetView();
     renderAll();
     setControlsEnabled(true);
-    setStatus("完了しました。点で囲んで戻す/消す、または島を切替できます。", 100);
+    setStatus("処理完了", 100);
+    showToast("背景削除が完了しました。");
   } catch (error) {
     console.error(error);
-    setStatus(`処理に失敗しました: ${error.message || error}`, 0);
+    setStatus("処理に失敗しました。", 0);
+    showToast(`処理に失敗しました: ${error.message || error}`);
   }
 }
 
@@ -352,7 +354,7 @@ function toggleLabel(label) {
   if (!info) return;
   const total = state.width * state.height;
   if (info.kind === "bg" && info.count > total * 0.35) {
-    setStatus("大きな背景領域です。必要な部分だけ点で囲んで戻してください。");
+    showToast("大きな背景領域です。必要な部分だけ点で囲んで戻してください。");
     return;
   }
   pushHistory();
@@ -362,7 +364,7 @@ function toggleLabel(label) {
   }
   relabel();
   renderAll();
-  setStatus(info.kind === "fg" ? "選択した島を消しました。" : "選択した島を戻しました。");
+  showToast(info.kind === "fg" ? "選択した島を消しました。" : "選択した島を戻しました。");
 }
 
 function applyPolygon(mode) {
@@ -383,7 +385,7 @@ function applyPolygon(mode) {
   relabel();
   renderAll();
   clearPolygon();
-  setStatus(mode === "fg" ? "囲んだ内側をすべて戻しました。" : "囲んだ内側をすべて消しました。");
+  showToast(mode === "fg" ? "囲んだ内側をすべて戻しました。" : "囲んだ内側をすべて消しました。");
 }
 
 function polygonBounds(points) {
@@ -508,7 +510,6 @@ function rotateCurrentImage(degrees) {
   resetView();
   renderAll();
   updateHistoryButtons();
-  setStatus(`${degrees > 0 ? "右" : "左"}に${Math.abs(degrees)}°回転しました。`);
 }
 
 function rotateImageData(imageData, degrees, smooth) {
@@ -581,7 +582,6 @@ async function exportPng() {
 async function copyTransparentPng() {
   if (!state) return;
   if (!navigator.clipboard || !window.ClipboardItem) {
-    setStatus("このブラウザは画像のクリップボードコピーに対応していません。");
     showToast("このブラウザは画像コピーに対応していません。");
     return;
   }
@@ -590,11 +590,9 @@ async function copyTransparentPng() {
     await navigator.clipboard.write([
       new ClipboardItem({ "image/png": blob })
     ]);
-    setStatus("透過PNGをクリップボードへコピーしました。PowerPointやExcelへ貼り付けできます。");
     showToast("クリップボードへコピーしました。");
   } catch (error) {
     console.error(error);
-    setStatus("クリップボードへのコピーに失敗しました。ブラウザの権限設定を確認してください。");
     showToast("コピーに失敗しました。");
   }
 }
@@ -823,7 +821,7 @@ redoButton.addEventListener("click", () => {
 relabelButton.addEventListener("click", () => {
   relabel();
   renderAll();
-  setStatus("島を再計算しました。");
+  showToast("島を再計算しました。");
 });
 applyPolygonButton.addEventListener("click", () => {
   if (currentTool === "polyFg") applyPolygon("fg");
