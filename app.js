@@ -320,6 +320,10 @@
     return showCandidates.checked || editMode.value === "candidate" || editMode.value === "clickRestore";
   }
 
+  function canClickRestore() {
+    return editMode.value === "candidate" || editMode.value === "clickRestore" || showCandidates.checked;
+  }
+
   async function drawBlobToCanvas(blob, canvas, context) {
     const bitmap = await createImageBitmap(blob);
     canvas.width = bitmap.width;
@@ -933,7 +937,7 @@
     const item = activeItem();
     if (!item || compareMode) return;
     const point = canvasPointToSource(event, item);
-    if (editMode.value === "clickRestore") return restoreConnectedArea(point);
+    if (canClickRestore()) return restoreConnectedArea(point);
     if (editMode.value !== "restoreBrush" && editMode.value !== "eraseBrush") return;
     drawing = true;
     resultCanvas.setPointerCapture(event.pointerId);

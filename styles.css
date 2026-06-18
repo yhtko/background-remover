@@ -542,7 +542,7 @@ h1 {
 .result-image {
   position: relative;
   z-index: 1;
-  cursor: crosshair;
+  cursor: pointer;
 }
 
 .candidate-overlay {
