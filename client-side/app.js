@@ -2,6 +2,8 @@ import { removeBackground } from "https://cdn.jsdelivr.net/npm/@imgly/background
 
 const MAX_DIMENSION = 1800;
 const HISTORY_LIMIT = 12;
+const MIN_ZOOM = 0.08;
+const MAX_ZOOM = 10;
 
 const fileInput = document.getElementById("fileInput");
 const selectButton = document.getElementById("selectButton");
@@ -17,6 +19,7 @@ const labelInfo = document.getElementById("labelInfo");
 const undoButton = document.getElementById("undoButton");
 const redoButton = document.getElementById("redoButton");
 const relabelButton = document.getElementById("relabelButton");
+const canvasActions = document.getElementById("canvasActions");
 const applyPolygonButton = document.getElementById("applyPolygonButton");
 const undoPointButton = document.getElementById("undoPointButton");
 const clearPolygonButton = document.getElementById("clearPolygonButton");
@@ -59,6 +62,7 @@ function setTool(tool) {
   toolButtons.forEach((button) => button.classList.toggle("active", button.dataset.tool === tool));
   interactionCanvas.style.cursor = tool === "pan" ? "grab" : "pointer";
   clearPolygon();
+  updateCanvasActions();
 }
 
 function setControlsEnabled(enabled) {
@@ -100,6 +104,7 @@ async function loadFile(file) {
     setStatus("マスクを作成しています。", 74);
     await initializeMaskFromBlob(removedBlob);
     relabel();
+    await nextFrame();
     resetView();
     renderAll();
     setControlsEnabled(true);
@@ -312,6 +317,12 @@ function drawPolygonGuide() {
   interactionCtx.restore();
 }
 
+function updateCanvasActions() {
+  const polygonMode = currentTool === "polyFg" || currentTool === "polyBg";
+  canvasActions.hidden = !polygonMode;
+  updatePolygonButtons();
+}
+
 function updatePolygonButtons() {
   const active = currentTool === "polyFg" || currentTool === "polyBg";
   applyPolygonButton.disabled = !state || !active || polygonPoints.length < 3;
@@ -437,20 +448,25 @@ function updateHistoryButtons() {
 }
 
 function resetView() {
+  if (!state) return;
   const bounds = viewportBounds();
-  zoom = Math.min(1, Math.min(bounds.width / state.width, bounds.height / state.height));
+  const fit = Math.min(bounds.width / state.width, bounds.height / state.height);
+  zoom = Math.min(1, Math.max(MIN_ZOOM, fit));
   panX = bounds.left + (bounds.width - state.width * zoom) / 2;
   panY = bounds.top + (bounds.height - state.height * zoom) / 2;
   applyTransform();
 }
 
 function viewportBounds() {
-  const padding = 24;
+  const rect = viewport.getBoundingClientRect();
+  const side = 24;
+  const top = 76;
+  const bottom = 64;
   return {
-    left: padding,
-    top: padding,
-    width: Math.max(1, viewport.clientWidth - padding * 2),
-    height: Math.max(1, viewport.clientHeight - padding * 2)
+    left: side,
+    top,
+    width: Math.max(1, rect.width - side * 2),
+    height: Math.max(1, rect.height - top - bottom)
   };
 }
 
@@ -462,13 +478,15 @@ function applyTransform() {
 function zoomAtCenter(nextZoom) {
   if (!state) return;
   const bounds = viewportBounds();
-  const centerX = bounds.left + bounds.width / 2;
-  const centerY = bounds.top + bounds.height / 2;
-  const imageX = (centerX - panX) / zoom;
-  const imageY = (centerY - panY) / zoom;
-  zoom = Math.max(0.1, Math.min(8, nextZoom));
-  panX = centerX - imageX * zoom;
-  panY = centerY - imageY * zoom;
+  zoomAtViewportPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2, nextZoom);
+}
+
+function zoomAtViewportPoint(viewportX, viewportY, nextZoom) {
+  const imageX = (viewportX - panX) / zoom;
+  const imageY = (viewportY - panY) / zoom;
+  zoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
+  panX = viewportX - imageX * zoom;
+  panY = viewportY - imageY * zoom;
   applyTransform();
 }
 
@@ -506,6 +524,10 @@ function canvasToBlob(canvas, type) {
   });
 }
 
+function nextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
 selectButton.addEventListener("click", () => fileInput.click());
 dropZone.addEventListener("click", (event) => {
   if (event.target !== selectButton) fileInput.click();
@@ -537,6 +559,14 @@ previewButtons.forEach((button) => {
     renderAll();
   });
 });
+
+viewport.addEventListener("wheel", (event) => {
+  if (!state) return;
+  event.preventDefault();
+  const rect = viewport.getBoundingClientRect();
+  const factor = event.deltaY < 0 ? 1.14 : 1 / 1.14;
+  zoomAtViewportPoint(event.clientX - rect.left, event.clientY - rect.top, zoom * factor);
+}, { passive: false });
 
 interactionCanvas.addEventListener("pointermove", (event) => {
   if (!state) return;
@@ -654,3 +684,7 @@ zoomOutButton.addEventListener("click", () => zoomAtCenter(zoom / 1.25));
 zoomInButton.addEventListener("click", () => zoomAtCenter(zoom * 1.25));
 zoomResetButton.addEventListener("click", resetView);
 saveButton.addEventListener("click", exportPng);
+window.addEventListener("resize", () => {
+  if (!state) return;
+  resetView();
+});

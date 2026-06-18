@@ -320,6 +320,43 @@ h1 {
   color: #ffffff;
 }
 
+.canvas-actions,
+.canvas-zoom {
+  position: absolute;
+  z-index: 5;
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.canvas-actions {
+  left: 12px;
+  bottom: 12px;
+}
+
+.canvas-zoom {
+  right: 12px;
+  bottom: 12px;
+}
+
+.canvas-actions button,
+.canvas-zoom button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  font-weight: 800;
+}
+
+.canvas-actions button:last-child,
+.canvas-zoom button:last-child {
+  border-right: 0;
+}
+
 .canvas-viewport.checker {
   background-color: #ffffff;
   background-image:
@@ -345,6 +382,7 @@ h1 {
 
 .canvas-stack {
   position: absolute;
+  z-index: 1;
   transform-origin: 0 0;
 }
 
@@ -377,5 +415,18 @@ h1 {
 
   .canvas-viewport {
     min-height: 560px;
+  }
+
+  .view-switch,
+  .canvas-actions,
+  .canvas-zoom {
+    max-width: calc(100% - 24px);
+  }
+
+  .view-switch button,
+  .canvas-actions button,
+  .canvas-zoom button {
+    padding: 0 9px;
+    font-size: 12px;
   }
 }
