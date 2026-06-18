@@ -15,6 +15,7 @@
 - PNG / JPEG 保存
 - 複数画像の直列一括処理
 - ZIPダウンロード
+- API送信前の画像軽量化
 
 ## 用途プリセット
 
@@ -48,6 +49,7 @@ window.BACKGROUND_REMOVER_CONFIG = {
 - 出力: PNG / JPEG
 - アップロード画像は保存しません
 - 複数画像はAPI負荷を避けるため1枚ずつ直列処理します
+- API送信前にブラウザ側で長辺1800px以内、JPEG品質0.86を目安に軽量化します
 
 ## Cloud Run API
 

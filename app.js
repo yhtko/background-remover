@@ -1,5 +1,7 @@
 (function () {
   const MAX_FILE_SIZE = 5 * 1024 * 1024;
+  const API_MAX_DIMENSION = 1800;
+  const API_JPEG_QUALITY = 0.86;
   const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg"]);
   const CONFIG = window.BACKGROUND_REMOVER_CONFIG || {};
   const RATE_LIMIT_COUNT = 3;
@@ -85,7 +87,6 @@
   const activeFileName = document.getElementById("activeFileName");
   const activeFileStatus = document.getElementById("activeFileStatus");
   const outputSummary = document.getElementById("outputSummary");
-  const imageViewport = document.getElementById("imageViewport");
   const resultImage = document.getElementById("resultImage");
   const compareView = document.getElementById("compareView");
   const beforeImage = document.getElementById("beforeImage");
@@ -97,6 +98,8 @@
   const processingText = document.getElementById("processingText");
   const viewBgButtons = document.querySelectorAll("[data-view-bg]");
 
+  const apiCanvas = document.createElement("canvas");
+  const apiContext = apiCanvas.getContext("2d");
   const workCanvas = document.createElement("canvas");
   const workContext = workCanvas.getContext("2d", { willReadFrequently: true });
   const outputCanvas = document.createElement("canvas");
@@ -175,7 +178,7 @@
   function updateSaveState() {
     const successCount = successfulItems().length;
     saveButton.disabled = processing || successCount === 0;
-    compareButton.disabled = !activeItem() || !activeItem().finalUrl;
+    compareButton.disabled = !activeItem() || !activeItem().compareUrl;
   }
 
   function successfulItems() {
@@ -200,6 +203,7 @@
   function revokeItemUrls(item) {
     if (item.originalUrl) URL.revokeObjectURL(item.originalUrl);
     if (item.finalUrl) URL.revokeObjectURL(item.finalUrl);
+    if (item.compareUrl) URL.revokeObjectURL(item.compareUrl);
   }
 
   function createItems(files) {
@@ -209,14 +213,18 @@
       return {
         id: `${Date.now()}-${index}`,
         file,
+        apiFile: null,
         originalUrl: URL.createObjectURL(file),
         removedBlob: null,
         finalBlob: null,
         finalUrl: "",
+        compareBlob: null,
+        compareUrl: "",
         outputName: "",
         status: error ? "failed" : "queued",
         error,
-        progressLabel: error || "待機中"
+        progressLabel: error || "待機中",
+        apiSizeLabel: ""
       };
     });
     activeId = items[0] ? items[0].id : null;
@@ -264,7 +272,7 @@
   function statusLabel(item) {
     if (item.status === "queued") return "待機中";
     if (item.status === "processing") return item.progressLabel || "処理中";
-    if (item.status === "done") return "完了";
+    if (item.status === "done") return item.apiSizeLabel ? `完了 / API送信 ${item.apiSizeLabel}` : "完了";
     return item.error || "失敗";
   }
 
@@ -301,15 +309,19 @@
     beforeImage.src = item.originalUrl;
 
     resultImage.hidden = !item.finalUrl || compareMode;
-    compareView.hidden = !item.finalUrl || !compareMode;
+    compareView.hidden = !item.compareUrl || !compareMode;
 
     if (item.finalUrl) {
       resultImage.src = item.finalUrl;
-      afterImage.src = item.finalUrl;
+    } else {
+      resultImage.removeAttribute("src");
+    }
+
+    if (item.compareUrl) {
+      afterImage.src = item.compareUrl;
       compareButton.textContent = compareMode ? "結果だけ見る" : "比較を見る";
       updateCompareSlider();
     } else {
-      resultImage.removeAttribute("src");
       afterImage.removeAttribute("src");
       compareButton.textContent = "比較を見る";
     }
@@ -323,6 +335,11 @@
       '"': "&quot;",
       "'": "&#039;"
     })[char]);
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
   }
 
   function wait(ms) {
@@ -356,12 +373,16 @@
       const item = processable[index];
       activeId = item.id;
       item.status = "processing";
-      item.progressLabel = `${index + 1} / ${processable.length} 背景削除中`;
+      item.progressLabel = `${index + 1} / ${processable.length} 画像を軽量化中`;
       renderAll();
 
       try {
+        item.apiFile = await prepareApiFile(item.file);
+        item.apiSizeLabel = `${formatSize(item.file.size)} → ${formatSize(item.apiFile.size)}`;
+        item.progressLabel = `${index + 1} / ${processable.length} 背景削除中`;
+        renderAll();
         await waitForRateSlot();
-        item.removedBlob = await callRemoveBackground(item.file);
+        item.removedBlob = await callRemoveBackground(item.apiFile);
         item.progressLabel = "画像を整形中";
         renderAll();
         await renderFinalImage(item);
@@ -377,6 +398,24 @@
 
     setBusy(false);
     renderAll();
+  }
+
+  async function prepareApiFile(file) {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, API_MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+
+    apiCanvas.width = width;
+    apiCanvas.height = height;
+    apiContext.fillStyle = "#ffffff";
+    apiContext.fillRect(0, 0, width, height);
+    apiContext.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    const blob = await canvasToBlob(apiCanvas, "image/jpeg", API_JPEG_QUALITY);
+    if (blob.size >= file.size && scale === 1) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "_api.jpg"), { type: "image/jpeg" });
   }
 
   async function callRemoveBackground(file) {
@@ -401,10 +440,20 @@
 
   async function renderFinalImage(item) {
     if (!item.removedBlob) return;
-    const final = await transformImage(item.removedBlob, settings());
+    const s = settings();
+    const final = await transformImage(item.removedBlob, s);
+    const compare = await transformImage(item.removedBlob, {
+      ...s,
+      background: "transparent",
+      format: "png"
+    });
+
     if (item.finalUrl) URL.revokeObjectURL(item.finalUrl);
+    if (item.compareUrl) URL.revokeObjectURL(item.compareUrl);
     item.finalBlob = final.blob;
     item.finalUrl = URL.createObjectURL(final.blob);
+    item.compareBlob = compare.blob;
+    item.compareUrl = URL.createObjectURL(compare.blob);
     item.outputName = makeCleanName(item.file.name, final.format);
   }
 
@@ -632,6 +681,7 @@
   saveButton.addEventListener("click", saveOutput);
   compareButton.addEventListener("click", () => {
     compareMode = !compareMode;
+    compareSlider.value = compareMode ? "50" : "100";
     renderActive();
   });
   compareSlider.addEventListener("input", updateCompareSlider);
