@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client-side Product Photo Cleaner</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Factory Tools / Browser only</p>
+        <h1>Client-side Product Photo Cleaner</h1>
+        <p class="subtitle">画像をサーバーへ送らず、ブラウザ内で背景除去とマスク修正を行います。</p>
+      </div>
+      <nav class="nav-actions">
+        <a href="../">Cloud Run版</a>
+        <a href="../../">Tools</a>
+      </nav>
+    </header>
+
+    <section class="layout">
+      <aside class="sidebar">
+        <section class="panel upload-panel">
+          <div id="dropZone" class="drop-zone" tabindex="0">
+            <input id="fileInput" type="file" accept="image/png,image/jpeg" hidden>
+            <strong>画像をアップロード</strong>
+            <span>PNG / JPG / JPEG。初回のみモデルをダウンロードします。</span>
+            <button id="selectButton" type="button">ファイルを選択</button>
+          </div>
+          <div id="statusText" class="status-text">画像はまだ選択されていません。</div>
+          <div class="progress-track"><div id="progressBar"></div></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <strong>マスク修正</strong>
+            <span id="labelInfo">島: -</span>
+          </div>
+          <div class="tool-grid">
+            <button type="button" class="active" data-tool="toggle">クリックトグル</button>
+            <button type="button" data-tool="rectFg">矩形を前景</button>
+            <button type="button" data-tool="rectBg">矩形を背景</button>
+            <button type="button" data-tool="threshold">範囲しきい値</button>
+            <button type="button" data-tool="pan">パン</button>
+          </div>
+
+          <label class="slider-row" for="thresholdSlider">
+            <span>しきい値</span>
+            <output id="thresholdValue">128</output>
+            <input id="thresholdSlider" type="range" min="1" max="254" value="128">
+          </label>
+
+          <label class="check-row">
+            <input id="showBoundary" type="checkbox" checked>
+            <span>境界線を表示</span>
+          </label>
+
+          <div class="action-row">
+            <button id="undoButton" type="button" disabled>Undo</button>
+            <button id="redoButton" type="button" disabled>Redo</button>
+            <button id="relabelButton" type="button" disabled>島を再計算</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <strong>表示・出力</strong>
+          </div>
+          <label class="field">
+            <span>プレビュー背景</span>
+            <select id="previewBackground">
+              <option value="checker">透明市松</option>
+              <option value="white">白</option>
+              <option value="black">黒</option>
+              <option value="gray">検査グレー</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>書き出し背景</span>
+            <select id="exportBackground">
+              <option value="transparent">透明PNG</option>
+              <option value="white">白背景PNG</option>
+              <option value="black">黒背景PNG</option>
+              <option value="gray">検査グレーPNG</option>
+            </select>
+          </label>
+          <div class="action-row">
+            <button id="zoomOutButton" type="button" disabled>-</button>
+            <button id="zoomResetButton" type="button" disabled>100%</button>
+            <button id="zoomInButton" type="button" disabled>+</button>
+          </div>
+          <button id="saveButton" class="primary-button" type="button" disabled>PNG保存</button>
+        </section>
+
+        <section class="panel note-panel">
+          <strong>ネットワークについて</strong>
+          <p>画像データは送信しません。モデルファイルの初回ダウンロードのみ通信が発生します。</p>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <div id="canvasViewport" class="canvas-viewport checker">
+          <div id="canvasStack" class="canvas-stack">
+            <canvas id="outputCanvas"></canvas>
+            <canvas id="boundaryCanvas"></canvas>
+            <canvas id="interactionCanvas"></canvas>
+          </div>
+          <div id="emptyState" class="empty-state">
+            <strong>完全ブラウザ内処理版</strong>
+            <span>画像を選ぶと、ブラウザ内で背景除去モデルを実行します。</span>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

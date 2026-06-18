@@ -32,6 +32,7 @@
 ## 構成
 
 - `index.html` / `styles.css` / `app.js`: GitHub Pages 用フロント
+- `client-side/`: ブラウザ内完結版の試作ページ
 - `config.js`: Cloud Run API URL
 - `api/`: Cloud Run 用 FastAPI アプリ
 - `.github/workflows/pages.yml`: GitHub Pages デプロイ
@@ -100,3 +101,16 @@ gcloud run deploy background-remover-api \
 `main` ブランチへ push すると GitHub Actions で Pages 用ファイルが公開されます。
 
 Tools ポータルには、公開後の GitHub Pages URL を追加してください。
+
+## ブラウザ内完結版
+
+`/client-side/` に、Cloud Runを使わずブラウザ内で背景除去とマスク修正を行う別パターンを追加しています。
+
+- 画像データはサーバーへ送信しません
+- 初回のみ背景除去モデルのダウンロード通信が発生します
+- クリックトグルでConnected Componentの島を前景/背景に反転できます
+- 矩形選択で一括前景化/背景化できます
+- 選択範囲内だけconfidence mapからしきい値再適用できます
+- Undo/Redo、ズーム/パン、境界線表示、PNG保存に対応しています
+
+完全オフライン化には、次段階でService Workerによるモデルキャッシュが必要です。
