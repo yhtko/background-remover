@@ -24,6 +24,7 @@ const applyPolygonButton = document.getElementById("applyPolygonButton");
 const undoPointButton = document.getElementById("undoPointButton");
 const clearPolygonButton = document.getElementById("clearPolygonButton");
 const exportBackground = document.getElementById("exportBackground");
+const outputSize = document.getElementById("outputSize");
 const zoomOutButton = document.getElementById("zoomOutButton");
 const zoomResetButton = document.getElementById("zoomResetButton");
 const zoomInButton = document.getElementById("zoomInButton");
@@ -298,7 +299,8 @@ function drawPolygonGuide() {
   updatePolygonButtons();
   if (!polygonPoints.length) return;
   interactionCtx.save();
-  interactionCtx.lineWidth = Math.max(2, 2 / zoom);
+  const pointRadius = 6 / zoom;
+  interactionCtx.lineWidth = 2 / zoom;
   interactionCtx.strokeStyle = "rgba(37, 99, 235, 0.95)";
   interactionCtx.fillStyle = "rgba(37, 99, 235, 0.14)";
   interactionCtx.beginPath();
@@ -314,7 +316,7 @@ function drawPolygonGuide() {
   polygonPoints.forEach((point, index) => {
     interactionCtx.beginPath();
     interactionCtx.fillStyle = index === 0 ? "#16a34a" : "#2563eb";
-    interactionCtx.arc(point.x, point.y, Math.max(4, 5 / zoom), 0, Math.PI * 2);
+    interactionCtx.arc(point.x, point.y, pointRadius, 0, Math.PI * 2);
     interactionCtx.fill();
   });
   interactionCtx.restore();
@@ -584,11 +586,16 @@ async function copyTransparentPng() {
 
 async function createOutputBlob(bg) {
   const bounds = alphaBounds(OUTPUT_PADDING);
-  const outputWidth = bounds.x2 - bounds.x1 + 1;
-  const outputHeight = bounds.y2 - bounds.y1 + 1;
+  const sourceWidth = bounds.x2 - bounds.x1 + 1;
+  const sourceHeight = bounds.y2 - bounds.y1 + 1;
+  const scale = outputScale(sourceWidth, sourceHeight);
+  const outputWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const outputHeight = Math.max(1, Math.round(sourceHeight * scale));
   tempCanvas.width = outputWidth;
   tempCanvas.height = outputHeight;
   tempCtx.clearRect(0, 0, outputWidth, outputHeight);
+  tempCtx.imageSmoothingEnabled = true;
+  tempCtx.imageSmoothingQuality = "high";
   if (bg !== "transparent") {
     tempCtx.fillStyle = bg === "black" ? "#111827" : bg === "gray" ? "#8f99a8" : "#ffffff";
     tempCtx.fillRect(0, 0, outputWidth, outputHeight);
@@ -600,8 +607,8 @@ async function createOutputBlob(bg) {
     outputCanvas,
     bounds.x1,
     bounds.y1,
-    outputWidth,
-    outputHeight,
+    sourceWidth,
+    sourceHeight,
     0,
     0,
     outputWidth,
@@ -610,6 +617,13 @@ async function createOutputBlob(bg) {
   previewMode = previousMode;
   renderOutput();
   return canvasToBlob(tempCanvas, "image/png");
+}
+
+function outputScale(width, height) {
+  const preset = outputSize.value;
+  const maxLongSide = preset === "light" ? 900 : preset === "standard" ? 1400 : Infinity;
+  if (!Number.isFinite(maxLongSide)) return 1;
+  return Math.min(1, maxLongSide / Math.max(width, height));
 }
 
 function alphaBounds(padding = 0) {
@@ -706,7 +720,7 @@ interactionCanvas.addEventListener("pointermove", (event) => {
     if (polygonPoints.length) {
       interactionCtx.save();
       interactionCtx.strokeStyle = "rgba(37, 99, 235, 0.55)";
-      interactionCtx.lineWidth = Math.max(1, 1 / zoom);
+      interactionCtx.lineWidth = 1 / zoom;
       const last = polygonPoints[polygonPoints.length - 1];
       interactionCtx.beginPath();
       interactionCtx.moveTo(last.x, last.y);
