@@ -150,12 +150,7 @@ async function loadFile(file) {
     setControlsEnabled(true);
     setTool("pan");
     setStatus("処理完了", 100);
-    if (historyEnabled.checked) {
-      const saved = await saveCurrentToHistory();
-      showToast(saved ? "背景削除が完了し、履歴に保存しました。" : "背景削除が完了しました。");
-    } else {
-      showToast("背景削除が完了しました。");
-    }
+    showToast("背景削除が完了しました。");
   } catch (error) {
     console.error(error);
     setStatus("処理に失敗しました。", 0);
@@ -641,7 +636,11 @@ async function exportPng() {
   if (!state) return;
   const blob = await createOutputBlob(exportBackground.value);
   downloadBlob(blob, cleanFileName(state.fileName));
-  showToast("PNGを保存しました。");
+  const saved = await saveBlobToHistory(blob, {
+    action: "PNG保存",
+    background: exportBackground.value
+  });
+  showToast(saved ? "PNGを保存し、履歴に追加しました。" : "PNGを保存しました。");
 }
 
 async function copyTransparentPng() {
@@ -655,7 +654,11 @@ async function copyTransparentPng() {
     await navigator.clipboard.write([
       new ClipboardItem({ "image/png": blob })
     ]);
-    showToast("クリップボードへコピーしました。");
+    const saved = await saveBlobToHistory(blob, {
+      action: "コピー",
+      background: "transparent"
+    });
+    showToast(saved ? "コピーし、履歴に追加しました。" : "クリップボードへコピーしました。");
   } catch (error) {
     console.error(error);
     showToast("コピーに失敗しました。");
@@ -726,9 +729,9 @@ async function getHistoryItem(id) {
   return historyTx("readonly", (store) => requestResult(store.get(id)));
 }
 
-async function saveCurrentToHistory() {
+async function saveBlobToHistory(blob, details) {
   if (!state) return false;
-  const blob = await createOutputBlob("transparent");
+  if (!historyEnabled.checked) return false;
   const item = {
     id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     fileName: cleanFileName(state.fileName),
@@ -736,6 +739,8 @@ async function saveCurrentToHistory() {
     createdAt: Date.now(),
     size: blob.size,
     outputSize: outputSize.value,
+    action: details.action,
+    background: details.background,
     blob
   };
   try {
@@ -814,7 +819,7 @@ async function renderHistory() {
 
     const meta = document.createElement("div");
     meta.className = "history-meta";
-    meta.textContent = `${formatDate(item.createdAt)} / ${formatBytes(item.size)} / ${item.outputSize || "標準"}`;
+    meta.textContent = `${formatDate(item.createdAt)} / ${item.action || "保存"} / ${backgroundLabel(item.background)} / ${formatBytes(item.size)} / ${item.outputSize || "標準"}`;
 
     const actions = document.createElement("div");
     actions.className = "history-actions";
@@ -846,6 +851,16 @@ function formatDate(value) {
 function formatBytes(bytes) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function backgroundLabel(value) {
+  const labels = {
+    transparent: "透明",
+    white: "白背景",
+    black: "黒背景",
+    gray: "検査グレー"
+  };
+  return labels[value] || "透明";
 }
 
 async function initializeHistory() {

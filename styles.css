@@ -149,6 +149,21 @@ h1 {
   padding: 14px;
 }
 
+details.panel {
+  display: block;
+}
+
+.history-drawer summary {
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.history-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
 .panel-title {
   display: flex;
   align-items: center;
@@ -306,7 +321,9 @@ h1 {
 
 .history-item {
   display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto;
   gap: 8px;
+  align-items: center;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -314,6 +331,8 @@ h1 {
 }
 
 .history-item strong {
+  grid-column: 2;
+  align-self: end;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -323,10 +342,11 @@ h1 {
   display: grid;
   place-items: center;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 4 / 3;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  grid-row: span 2;
 }
 
 .history-thumb img {
@@ -337,15 +357,20 @@ h1 {
 }
 
 .history-meta {
+  grid-column: 2;
+  align-self: start;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
 .history-actions {
+  grid-column: 3;
+  grid-row: 1 / span 2;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
+  min-width: 220px;
 }
 
 .history-actions button {
@@ -566,6 +591,22 @@ h1 {
   .canvas-zoom,
   .canvas-rotate {
     max-width: calc(100% - 24px);
+  }
+
+  .history-item {
+    grid-template-columns: 1fr;
+  }
+
+  .history-thumb,
+  .history-item strong,
+  .history-meta,
+  .history-actions {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .history-actions {
+    min-width: 0;
   }
 
   .view-switch button,

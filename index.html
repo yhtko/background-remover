@@ -74,19 +74,6 @@
           <p>画像データは送信しません。モデルファイルの初回ダウンロードのみ通信が発生します。</p>
         </section>
 
-        <section class="panel history-panel">
-          <div class="panel-title">
-            <strong>背景除去履歴</strong>
-            <button id="clearHistoryButton" type="button">全削除</button>
-          </div>
-          <label class="check-row">
-            <input id="historyEnabled" type="checkbox">
-            <span>処理後PNGをこのブラウザに残す</span>
-          </label>
-          <p class="tool-help">保存した履歴はこの端末のブラウザ内だけに残ります。キャッシュ削除で消える場合があります。</p>
-          <div id="historyList" class="history-list"></div>
-          <p id="historyEmpty" class="empty-note">履歴はまだありません。</p>
-        </section>
       </aside>
 
       <section class="workspace">
@@ -132,6 +119,23 @@
             <span>画像を選ぶと、ブラウザ内で背景除去モデルを実行します。</span>
           </div>
         </div>
+
+        <details class="panel history-panel history-drawer" open>
+          <summary>背景除去履歴</summary>
+          <div class="history-body">
+            <div class="panel-title">
+              <span>コピー/PNG保存した完成形を残します。</span>
+              <button id="clearHistoryButton" type="button">全削除</button>
+            </div>
+            <label class="check-row">
+              <input id="historyEnabled" type="checkbox">
+              <span>完成PNGをこのブラウザに残す</span>
+            </label>
+            <p class="tool-help">保存した履歴はこの端末のブラウザ内だけに残ります。キャッシュ削除で消える場合があります。</p>
+            <div id="historyList" class="history-list"></div>
+            <p id="historyEmpty" class="empty-note">履歴はまだありません。</p>
+          </div>
+        </details>
       </section>
     </section>
   </main>
