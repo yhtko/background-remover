@@ -88,25 +88,6 @@ h1 {
   font-weight: 700;
 }
 
-.nav-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.nav-actions a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 38px;
-  padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-  text-decoration: none;
-  box-shadow: var(--shadow);
-}
-
 .layout {
   display: grid;
   grid-template-columns: minmax(310px, 380px) minmax(0, 1fr);
@@ -320,6 +301,7 @@ h1 {
   color: #ffffff;
 }
 
+.canvas-output,
 .canvas-actions,
 .canvas-zoom,
 .canvas-rotate {
@@ -331,6 +313,12 @@ h1 {
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.canvas-output {
+  top: 12px;
+  left: 12px;
+  gap: 0;
 }
 
 .canvas-actions {
@@ -349,6 +337,8 @@ h1 {
   transform: translateX(-50%);
 }
 
+.canvas-output select,
+.canvas-output button,
 .canvas-actions button,
 .canvas-zoom button,
 .canvas-rotate button,
@@ -359,6 +349,16 @@ h1 {
   border-right: 1px solid var(--border);
   border-radius: 0;
   font-weight: 800;
+}
+
+.canvas-output select {
+  min-width: 104px;
+  padding-right: 28px;
+}
+
+.canvas-output button {
+  background: var(--primary);
+  color: #ffffff;
 }
 
 .rotate-angle {
@@ -373,6 +373,27 @@ h1 {
 .canvas-zoom button:last-child,
 .canvas-rotate button:last-child {
   border-right: 0;
+}
+
+.toast {
+  position: absolute;
+  right: 12px;
+  bottom: 58px;
+  z-index: 6;
+  max-width: min(360px, calc(100% - 24px));
+  padding: 10px 14px;
+  border: 1px solid #16a34a;
+  border-radius: var(--radius);
+  background: #dcfce7;
+  color: #14532d;
+  font-weight: 800;
+  box-shadow: var(--shadow);
+}
+
+.toast.error {
+  border-color: #dc2626;
+  background: #fee2e2;
+  color: #7f1d1d;
 }
 
 .canvas-viewport.checker {
@@ -438,6 +459,7 @@ h1 {
   }
 
   .view-switch,
+  .canvas-output,
   .canvas-actions,
   .canvas-zoom,
   .canvas-rotate {
@@ -445,6 +467,8 @@ h1 {
   }
 
   .view-switch button,
+  .canvas-output select,
+  .canvas-output button,
   .canvas-actions button,
   .canvas-zoom button,
   .canvas-rotate button,

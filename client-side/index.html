@@ -14,10 +14,6 @@
         <h1>Client-side Product Photo Cleaner</h1>
         <p class="subtitle">画像をサーバーへ送らず、ブラウザ内で背景除去とマスク修正を行います。</p>
       </div>
-      <nav class="nav-actions">
-        <a href="../">Cloud Run版</a>
-        <a href="../../">Tools</a>
-      </nav>
     </header>
 
     <section class="layout">
@@ -58,31 +54,6 @@
           </div>
         </section>
 
-        <section class="panel">
-          <div class="panel-title">
-            <strong>出力</strong>
-          </div>
-          <label class="field">
-            <span>書き出し背景</span>
-            <select id="exportBackground">
-              <option value="transparent">透明PNG</option>
-              <option value="white">白背景PNG</option>
-              <option value="black">黒背景PNG</option>
-              <option value="gray">検査グレーPNG</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>コピー/保存サイズ</span>
-            <select id="outputSize">
-              <option value="high">高画質</option>
-              <option value="standard" selected>標準</option>
-              <option value="light">軽量</option>
-            </select>
-          </label>
-          <button id="copyButton" class="primary-button" type="button" disabled>クリップボードへコピー</button>
-          <button id="saveButton" class="primary-button" type="button" disabled>PNG保存</button>
-        </section>
-
         <section class="panel note-panel">
           <strong>ネットワークについて</strong>
           <p>画像データは送信しません。モデルファイルの初回ダウンロードのみ通信が発生します。</p>
@@ -91,6 +62,24 @@
 
       <section class="workspace">
         <div id="canvasViewport" class="canvas-viewport checker">
+          <div class="canvas-output">
+            <select id="exportBackground" aria-label="書き出し背景">
+              <option value="transparent">透明PNG</option>
+              <option value="white">白背景PNG</option>
+              <option value="black">黒背景PNG</option>
+              <option value="gray">検査グレーPNG</option>
+            </select>
+            <select id="outputSize" aria-label="コピー/保存サイズ">
+              <option value="high">高画質</option>
+              <option value="standard" selected>標準</option>
+              <option value="light">軽量</option>
+            </select>
+            <button id="copyButton" type="button" disabled>コピー</button>
+            <button id="saveButton" type="button" disabled>PNG保存</button>
+          </div>
+
+          <div id="toast" class="toast" hidden></div>
+
           <div class="view-switch" aria-label="表示切替">
             <button type="button" class="active" data-preview="compare">元画像 + 結果</button>
             <button type="button" data-preview="checker">結果のみ</button>

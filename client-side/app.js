@@ -38,6 +38,7 @@ const outputCanvas = document.getElementById("outputCanvas");
 const boundaryCanvas = document.getElementById("boundaryCanvas");
 const interactionCanvas = document.getElementById("interactionCanvas");
 const emptyState = document.getElementById("emptyState");
+const toast = document.getElementById("toast");
 
 const outputCtx = outputCanvas.getContext("2d");
 const boundaryCtx = boundaryCanvas.getContext("2d");
@@ -56,10 +57,21 @@ let dragging = false;
 let rightButtonPanning = false;
 let lastPointer = null;
 let polygonPoints = [];
+let toastTimer = null;
 
 function setStatus(text, progress = null) {
   statusText.textContent = text;
   if (progress !== null) progressBar.style.width = `${progress}%`;
+}
+
+function showToast(message, type = "success") {
+  toast.textContent = message;
+  toast.classList.toggle("error", type === "error");
+  toast.hidden = false;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toast.hidden = true;
+  }, 2600);
 }
 
 function setTool(tool) {
@@ -564,12 +576,14 @@ async function exportPng() {
   link.download = state.fileName.replace(/\.[^.]+$/, "_client_clean.png");
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast("PNGを保存しました。");
 }
 
 async function copyTransparentPng() {
   if (!state) return;
   if (!navigator.clipboard || !window.ClipboardItem) {
     setStatus("このブラウザは画像のクリップボードコピーに対応していません。");
+    showToast("このブラウザは画像コピーに対応していません。", "error");
     return;
   }
   try {
@@ -578,9 +592,11 @@ async function copyTransparentPng() {
       new ClipboardItem({ "image/png": blob })
     ]);
     setStatus("透過PNGをクリップボードへコピーしました。PowerPointやExcelへ貼り付けできます。");
+    showToast("クリップボードへコピーしました。");
   } catch (error) {
     console.error(error);
     setStatus("クリップボードへのコピーに失敗しました。ブラウザの権限設定を確認してください。");
+    showToast("コピーに失敗しました。", "error");
   }
 }
 
