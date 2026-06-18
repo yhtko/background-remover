@@ -3,113 +3,194 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>背景削除ツール</title>
+  <title>Product Photo Cleaner</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <main class="app">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Tools</p>
-        <h1>背景削除ツール</h1>
+        <p class="eyebrow">Factory Tools</p>
+        <h1>Product Photo Cleaner</h1>
+        <p class="subtitle">製品写真を資料で使える画像へ</p>
       </div>
-      <a class="portal-link" href="../" aria-label="Toolsポータルへ戻る">Tools</a>
+      <a class="portal-link" href="../" aria-label="Toolsへ戻る">Tools</a>
     </header>
 
-    <section class="workspace" aria-label="背景削除">
-      <div class="upload-pane">
+    <section class="workspace" aria-label="Product Photo Cleaner">
+      <aside class="control-pane">
         <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="画像を選択">
-          <input id="fileInput" type="file" accept="image/png,image/jpeg" hidden>
-          <div class="upload-icon" aria-hidden="true">PNG</div>
-          <h2>画像をアップロード</h2>
-          <p>PNG / JPG / JPEG、最大 5MB</p>
+          <input id="fileInput" type="file" accept="image/png,image/jpeg" multiple hidden>
+          <div class="upload-icon" aria-hidden="true">IMG</div>
+          <h2>製品写真をアップロード</h2>
+          <p>PNG / JPG / JPEG、1ファイル最大5MB。複数選択できます。</p>
           <button id="selectButton" type="button">ファイルを選択</button>
         </div>
 
-        <div id="adjustPanel" class="adjust-panel" hidden>
-          <div class="adjust-title">
-            <strong>仕上げ調整</strong>
-            <button id="resetAdjustButton" type="button">リセット</button>
+        <section class="panel">
+          <div class="panel-title">
+            <strong>用途プリセット</strong>
+            <span id="presetSummary">透過PNG・余白小</span>
           </div>
+          <div id="presetGroup" class="preset-grid" aria-label="用途プリセット">
+            <button type="button" class="preset active" data-preset="ppt">
+              <strong>PowerPoint資料</strong>
+              <span>透過PNG / 余白少なめ</span>
+            </button>
+            <button type="button" class="preset" data-preset="work">
+              <strong>作業標準書</strong>
+              <span>白背景 / 余白中</span>
+            </button>
+            <button type="button" class="preset" data-preset="qc">
+              <strong>QCレポート</strong>
+              <span>白背景 / 中央配置</span>
+            </button>
+            <button type="button" class="preset" data-preset="parts">
+              <strong>部品写真</strong>
+              <span>白・黒背景で確認</span>
+            </button>
+            <button type="button" class="preset" data-preset="custom">
+              <strong>カスタム</strong>
+              <span>背景・余白・形式を手動設定</span>
+            </button>
+          </div>
+        </section>
 
-          <label class="slider-row" for="alphaCutoff">
-            <span>薄いフチを消す</span>
-            <output id="alphaCutoffValue">0</output>
-            <input id="alphaCutoff" type="range" min="0" max="160" value="0">
-          </label>
+        <details class="panel advanced-panel">
+          <summary>詳細設定</summary>
+          <div class="advanced-body">
+            <label class="field">
+              <span>背景</span>
+              <select id="outputBackground">
+                <option value="transparent">透明</option>
+                <option value="white">白</option>
+                <option value="black">黒</option>
+              </select>
+            </label>
 
-          <label class="slider-row" for="edgeContrast">
-            <span>境界をくっきり</span>
-            <output id="edgeContrastValue">0</output>
-            <input id="edgeContrast" type="range" min="0" max="100" value="0">
-          </label>
+            <label class="field">
+              <span>余白</span>
+              <select id="marginSize">
+                <option value="none">なし</option>
+                <option value="small">小</option>
+                <option value="medium">中</option>
+                <option value="large">大</option>
+              </select>
+            </label>
+
+            <label class="check-row">
+              <input id="centerObject" type="checkbox" checked>
+              <span>中央配置</span>
+            </label>
+
+            <label class="field">
+              <span>出力形式</span>
+              <select id="outputFormat">
+                <option value="png">PNG</option>
+                <option value="jpeg">JPEG</option>
+              </select>
+            </label>
+
+            <label class="slider-row" for="alphaCutoff">
+              <span>フチ除去</span>
+              <small>白い縁や薄い残りを取り除きます</small>
+              <output id="alphaCutoffValue">24</output>
+              <input id="alphaCutoff" type="range" min="0" max="180" value="24">
+            </label>
+
+            <label class="slider-row" for="edgeContrast">
+              <span>輪郭補正</span>
+              <small>切り抜き境界を自然に整えます</small>
+              <output id="edgeContrastValue">20</output>
+              <input id="edgeContrast" type="range" min="0" max="100" value="20">
+            </label>
+          </div>
+        </details>
+
+        <section class="panel queue-panel">
+          <div class="panel-title">
+            <strong>処理リスト</strong>
+            <span id="progressText">未選択</span>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <div id="progressBar"></div>
+          </div>
+          <div id="fileList" class="file-list"></div>
+          <div id="failureList" class="failure-list" hidden></div>
+        </section>
+      </aside>
+
+      <section class="result-pane">
+        <div class="result-toolbar">
+          <div class="view-tools">
+            <div class="segmented" aria-label="表示背景">
+              <button type="button" class="active" data-view-bg="checker">市松</button>
+              <button type="button" data-view-bg="white">白</button>
+              <button type="button" data-view-bg="black">黒</button>
+            </div>
+            <button id="compareButton" type="button" class="ghost-button" disabled>比較を見る</button>
+          </div>
+          <button id="saveButton" class="save-button" type="button" disabled>PNG保存</button>
         </div>
 
-        <div id="message" class="message" role="status" aria-live="polite"></div>
-      </div>
-
-      <div class="preview-pane">
-        <div class="preview-toolbar">
-          <div class="segmented" aria-label="プレビュー背景">
-            <button type="button" class="active" data-preview-bg="checker">市松</button>
-            <button type="button" data-preview-bg="white">白</button>
-            <button type="button" data-preview-bg="black">黒</button>
-          </div>
-          <button id="downloadButton" class="download" type="button" disabled>PNG保存</button>
-        </div>
-
-        <div id="previewStage" class="preview-stage checker">
+        <div id="resultStage" class="result-stage checker">
           <div id="emptyState" class="empty-state">
-            <strong>元画像と透過PNGをここで確認</strong>
-            <span>画像を選ぶと、処理前の状態をすぐに表示します。</span>
+            <strong>結果画像を大きく確認できます</strong>
+            <span>製品写真・部品写真・工具写真・治具写真をアップロードしてください。</span>
           </div>
 
-          <div id="previewGrid" class="preview-grid" hidden>
-            <figure class="preview-card original-card">
-              <figcaption>元画像</figcaption>
-              <div class="image-box">
-                <img id="originalImage" alt="元画像">
+          <div id="resultCanvas" class="result-canvas" hidden>
+            <div class="result-meta">
+              <div>
+                <strong id="activeFileName">-</strong>
+                <span id="activeFileStatus">処理待ち</span>
               </div>
-            </figure>
+              <span id="outputSummary">透過PNG / 余白小 / 中央配置</span>
+            </div>
 
-            <figure class="preview-card result-card">
-              <figcaption>
-                <span>背景削除後</span>
-                <small id="resultBadge">処理待ち</small>
-              </figcaption>
-              <div class="image-box result-box">
-                <div id="processingOverlay" class="processing-overlay" hidden>
-                  <span></span>
-                  <strong>処理中</strong>
+            <div id="imageViewport" class="image-viewport">
+              <img id="resultImage" class="result-image" alt="整形後の製品写真" hidden>
+
+              <div id="compareView" class="compare-view" hidden>
+                <img id="beforeImage" class="compare-before" alt="元画像">
+                <div id="afterClip" class="compare-after-wrap">
+                  <img id="afterImage" class="compare-after" alt="整形後の画像">
                 </div>
-                <img id="resultImage" alt="背景削除結果" hidden>
+                <div id="compareHandle" class="compare-handle" aria-hidden="true"></div>
+                <input id="compareSlider" class="compare-slider" type="range" min="0" max="100" value="100" aria-label="Before After 比較">
               </div>
-            </figure>
+
+              <div id="processingOverlay" class="processing-overlay" hidden>
+                <span></span>
+                <strong id="processingText">処理中</strong>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <section class="details" aria-label="利用条件">
-      <div>
-        <span>制限</span>
-        <strong>5MB / PNG・JPG・JPEG</strong>
-      </div>
-      <div>
-        <span>回数</span>
-        <strong>1分 3回</strong>
-      </div>
-      <div>
-        <span>出力</span>
-        <strong>透過PNG</strong>
-      </div>
-      <div>
-        <span>保存</span>
-        <strong>アップロード画像は保存しません</strong>
-      </div>
+        <section class="info-strip" aria-label="利用条件">
+          <div>
+            <span>入力</span>
+            <strong>PNG / JPG / JPEG</strong>
+          </div>
+          <div>
+            <span>制限</span>
+            <strong>1ファイル 5MB</strong>
+          </div>
+          <div>
+            <span>処理</span>
+            <strong>直列処理でAPI負荷を抑制</strong>
+          </div>
+          <div>
+            <span>保存</span>
+            <strong>アップロード画像は保存しません</strong>
+          </div>
+        </section>
+      </section>
     </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="./config.js"></script>
   <script src="./app.js"></script>
 </body>

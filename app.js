@@ -2,197 +2,582 @@
   const MAX_FILE_SIZE = 5 * 1024 * 1024;
   const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg"]);
   const CONFIG = window.BACKGROUND_REMOVER_CONFIG || {};
+  const RATE_LIMIT_COUNT = 3;
+  const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+  const PRESETS = {
+    ppt: {
+      summary: "透過PNG・余白小",
+      background: "transparent",
+      margin: "small",
+      format: "png",
+      center: true,
+      alphaCutoff: 24,
+      edgeContrast: 20
+    },
+    work: {
+      summary: "白背景・余白中",
+      background: "white",
+      margin: "medium",
+      format: "png",
+      center: true,
+      alphaCutoff: 20,
+      edgeContrast: 15
+    },
+    qc: {
+      summary: "白背景・中央配置",
+      background: "white",
+      margin: "medium",
+      format: "png",
+      center: true,
+      alphaCutoff: 24,
+      edgeContrast: 20
+    },
+    parts: {
+      summary: "部品写真・背景切替",
+      background: "white",
+      margin: "small",
+      format: "png",
+      center: true,
+      alphaCutoff: 30,
+      edgeContrast: 28
+    },
+    custom: {
+      summary: "カスタム設定",
+      background: "transparent",
+      margin: "small",
+      format: "png",
+      center: true,
+      alphaCutoff: 24,
+      edgeContrast: 20
+    }
+  };
+
+  const MARGIN_RATIO = {
+    none: 0,
+    small: 0.04,
+    medium: 0.10,
+    large: 0.18
+  };
 
   const fileInput = document.getElementById("fileInput");
   const selectButton = document.getElementById("selectButton");
   const dropZone = document.getElementById("dropZone");
-  const message = document.getElementById("message");
-  const emptyState = document.getElementById("emptyState");
-  const previewGrid = document.getElementById("previewGrid");
-  const originalImage = document.getElementById("originalImage");
-  const resultImage = document.getElementById("resultImage");
-  const resultBadge = document.getElementById("resultBadge");
-  const processingOverlay = document.getElementById("processingOverlay");
-  const downloadButton = document.getElementById("downloadButton");
-  const previewStage = document.getElementById("previewStage");
-  const bgButtons = document.querySelectorAll("[data-preview-bg]");
-  const adjustPanel = document.getElementById("adjustPanel");
+  const presetSummary = document.getElementById("presetSummary");
+  const presetButtons = document.querySelectorAll("[data-preset]");
+  const outputBackground = document.getElementById("outputBackground");
+  const marginSize = document.getElementById("marginSize");
+  const centerObject = document.getElementById("centerObject");
+  const outputFormat = document.getElementById("outputFormat");
   const alphaCutoff = document.getElementById("alphaCutoff");
   const edgeContrast = document.getElementById("edgeContrast");
   const alphaCutoffValue = document.getElementById("alphaCutoffValue");
   const edgeContrastValue = document.getElementById("edgeContrastValue");
-  const resetAdjustButton = document.getElementById("resetAdjustButton");
+  const progressText = document.getElementById("progressText");
+  const progressBar = document.getElementById("progressBar");
+  const fileList = document.getElementById("fileList");
+  const failureList = document.getElementById("failureList");
+  const saveButton = document.getElementById("saveButton");
+  const compareButton = document.getElementById("compareButton");
+  const resultStage = document.getElementById("resultStage");
+  const emptyState = document.getElementById("emptyState");
+  const resultCanvas = document.getElementById("resultCanvas");
+  const activeFileName = document.getElementById("activeFileName");
+  const activeFileStatus = document.getElementById("activeFileStatus");
+  const outputSummary = document.getElementById("outputSummary");
+  const imageViewport = document.getElementById("imageViewport");
+  const resultImage = document.getElementById("resultImage");
+  const compareView = document.getElementById("compareView");
+  const beforeImage = document.getElementById("beforeImage");
+  const afterImage = document.getElementById("afterImage");
+  const afterClip = document.getElementById("afterClip");
+  const compareHandle = document.getElementById("compareHandle");
+  const compareSlider = document.getElementById("compareSlider");
+  const processingOverlay = document.getElementById("processingOverlay");
+  const processingText = document.getElementById("processingText");
+  const viewBgButtons = document.querySelectorAll("[data-view-bg]");
 
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const workCanvas = document.createElement("canvas");
+  const workContext = workCanvas.getContext("2d", { willReadFrequently: true });
+  const outputCanvas = document.createElement("canvas");
+  const outputContext = outputCanvas.getContext("2d");
 
-  let originalUrl = "";
-  let adjustedUrl = "";
-  let resultBlob = null;
-  let sourceImageData = null;
-  let resultFileName = "background-removed.png";
+  let items = [];
+  let activeId = null;
+  let currentPreset = "ppt";
+  let processing = false;
+  let compareMode = false;
+  let requestTimestamps = [];
 
-  function setMessage(text, type) {
-    message.textContent = text;
-    message.className = type ? `message ${type}` : "message";
-  }
-
-  function setBusy(isBusy) {
-    selectButton.disabled = isBusy;
-    downloadButton.disabled = isBusy || !resultBlob;
-    dropZone.setAttribute("aria-busy", String(isBusy));
-    processingOverlay.hidden = !isBusy;
-    if (isBusy) resultBadge.textContent = "処理中";
-  }
-
-  function validateFile(file) {
-    if (!file) return "画像ファイルを選択してください。";
-    if (!ACCEPTED_TYPES.has(file.type)) return "PNG / JPG / JPEG の画像を選択してください。";
-    if (file.size > MAX_FILE_SIZE) return "画像サイズは 5MB 以下にしてください。";
-    return "";
-  }
-
-  function getEndpoint() {
+  function endpoint() {
     return String(CONFIG.apiEndpoint || "").trim();
   }
 
-  function makeDownloadName(fileName) {
-    const baseName = fileName.replace(/\.[^.]+$/, "") || "image";
-    return `${baseName}-transparent.png`;
+  function settings() {
+    return {
+      background: outputBackground.value,
+      margin: marginSize.value,
+      format: outputFormat.value,
+      center: centerObject.checked,
+      alphaCutoff: Number(alphaCutoff.value),
+      edgeContrast: Number(edgeContrast.value)
+    };
   }
 
-  function revokePreviewUrls() {
-    if (originalUrl) URL.revokeObjectURL(originalUrl);
-    if (adjustedUrl) URL.revokeObjectURL(adjustedUrl);
-    originalUrl = "";
-    adjustedUrl = "";
+  function setPreset(name) {
+    currentPreset = name;
+    const preset = PRESETS[name];
+    outputBackground.value = preset.background;
+    marginSize.value = preset.margin;
+    outputFormat.value = preset.format;
+    centerObject.checked = preset.center;
+    alphaCutoff.value = preset.alphaCutoff;
+    edgeContrast.value = preset.edgeContrast;
+    presetSummary.textContent = preset.summary;
+    presetButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.preset === name);
+    });
+    updateLabels();
+    refreshOutputSummary();
   }
 
-  function showOriginal(file) {
-    revokePreviewUrls();
-    originalUrl = URL.createObjectURL(file);
-    originalImage.src = originalUrl;
-    resultImage.hidden = true;
-    resultImage.removeAttribute("src");
-    emptyState.hidden = true;
-    previewGrid.hidden = false;
-    adjustPanel.hidden = true;
-    resultBlob = null;
-    sourceImageData = null;
-    resetAdjustments();
+  function markCustom() {
+    if (currentPreset === "custom") return;
+    currentPreset = "custom";
+    presetSummary.textContent = PRESETS.custom.summary;
+    presetButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.preset === "custom");
+    });
   }
 
-  function resetAdjustments() {
-    alphaCutoff.value = "0";
-    edgeContrast.value = "0";
-    updateSliderLabels();
-  }
-
-  function updateSliderLabels() {
+  function updateLabels() {
     alphaCutoffValue.textContent = alphaCutoff.value;
     edgeContrastValue.textContent = edgeContrast.value;
   }
 
-  async function captureSourceImageData(blob) {
-    const bitmap = await createImageBitmap(blob);
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(bitmap, 0, 0);
-    sourceImageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    bitmap.close();
+  function refreshOutputSummary() {
+    const s = settings();
+    const bgLabel = { transparent: "透明", white: "白背景", black: "黒背景" }[s.background];
+    const marginLabel = { none: "余白なし", small: "余白小", medium: "余白中", large: "余白大" }[s.margin];
+    const formatLabel = s.format.toUpperCase();
+    outputSummary.textContent = `${bgLabel}${formatLabel} / ${marginLabel} / ${s.center ? "中央配置" : "原寸寄せ"}`;
+    saveButton.textContent = successfulItems().length > 1 ? "すべてZIPで保存" : `${formatLabel}保存`;
   }
 
-  function applyAdjustments() {
-    if (!sourceImageData) return Promise.resolve();
+  function setBusy(isBusy, text) {
+    processing = isBusy;
+    selectButton.disabled = isBusy;
+    processingOverlay.hidden = !isBusy;
+    if (text) processingText.textContent = text;
+    updateSaveState();
+  }
 
-    const cutoff = Number(alphaCutoff.value);
-    const contrast = Number(edgeContrast.value) / 100;
-    const adjusted = new ImageData(
-      new Uint8ClampedArray(sourceImageData.data),
-      sourceImageData.width,
-      sourceImageData.height
+  function updateSaveState() {
+    const successCount = successfulItems().length;
+    saveButton.disabled = processing || successCount === 0;
+    compareButton.disabled = !activeItem() || !activeItem().finalUrl;
+  }
+
+  function successfulItems() {
+    return items.filter((item) => item.status === "done" && item.finalBlob);
+  }
+
+  function activeItem() {
+    return items.find((item) => item.id === activeId) || null;
+  }
+
+  function validateFile(file) {
+    if (!ACCEPTED_TYPES.has(file.type)) return "PNG / JPG / JPEG のみ対応しています。";
+    if (file.size > MAX_FILE_SIZE) return "5MBを超えています。";
+    return "";
+  }
+
+  function makeCleanName(fileName, format) {
+    const baseName = fileName.replace(/\.[^.]+$/, "") || "image";
+    return `${baseName}_clean.${format === "jpeg" ? "jpg" : "png"}`;
+  }
+
+  function revokeItemUrls(item) {
+    if (item.originalUrl) URL.revokeObjectURL(item.originalUrl);
+    if (item.finalUrl) URL.revokeObjectURL(item.finalUrl);
+  }
+
+  function createItems(files) {
+    items.forEach(revokeItemUrls);
+    items = Array.from(files).map((file, index) => {
+      const error = validateFile(file);
+      return {
+        id: `${Date.now()}-${index}`,
+        file,
+        originalUrl: URL.createObjectURL(file),
+        removedBlob: null,
+        finalBlob: null,
+        finalUrl: "",
+        outputName: "",
+        status: error ? "failed" : "queued",
+        error,
+        progressLabel: error || "待機中"
+      };
+    });
+    activeId = items[0] ? items[0].id : null;
+    compareMode = false;
+    renderAll();
+  }
+
+  function renderAll() {
+    renderFileList();
+    renderFailures();
+    renderProgress();
+    renderActive();
+    refreshOutputSummary();
+    updateSaveState();
+  }
+
+  function renderFileList() {
+    fileList.innerHTML = "";
+    if (!items.length) {
+      fileList.innerHTML = '<p class="empty-list">画像がまだ選択されていません。</p>';
+      return;
+    }
+
+    items.forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `file-item ${item.id === activeId ? "active" : ""}`;
+      button.dataset.id = item.id;
+      button.innerHTML = `
+        <img src="${item.originalUrl}" alt="">
+        <span>
+          <strong>${escapeHtml(item.file.name)}</strong>
+          <small>${statusLabel(item)}</small>
+        </span>
+      `;
+      button.addEventListener("click", () => {
+        activeId = item.id;
+        compareMode = false;
+        renderAll();
+      });
+      fileList.appendChild(button);
+    });
+  }
+
+  function statusLabel(item) {
+    if (item.status === "queued") return "待機中";
+    if (item.status === "processing") return item.progressLabel || "処理中";
+    if (item.status === "done") return "完了";
+    return item.error || "失敗";
+  }
+
+  function renderFailures() {
+    const failed = items.filter((item) => item.status === "failed");
+    failureList.hidden = failed.length === 0;
+    failureList.innerHTML = failed.length
+      ? `<strong>失敗した画像</strong>${failed.map((item) => `<span>${escapeHtml(item.file.name)}: ${escapeHtml(item.error)}</span>`).join("")}`
+      : "";
+  }
+
+  function renderProgress() {
+    if (!items.length) {
+      progressText.textContent = "未選択";
+      progressBar.style.width = "0%";
+      return;
+    }
+    const finished = items.filter((item) => item.status === "done" || item.status === "failed").length;
+    const total = items.length;
+    const active = items.find((item) => item.status === "processing");
+    progressText.textContent = active ? `${finished + 1} / ${total} 処理中` : `${finished} / ${total} 完了`;
+    progressBar.style.width = `${Math.round((finished / total) * 100)}%`;
+  }
+
+  function renderActive() {
+    const item = activeItem();
+    emptyState.hidden = Boolean(item);
+    resultCanvas.hidden = !item;
+
+    if (!item) return;
+
+    activeFileName.textContent = item.file.name;
+    activeFileStatus.textContent = statusLabel(item);
+    beforeImage.src = item.originalUrl;
+
+    resultImage.hidden = !item.finalUrl || compareMode;
+    compareView.hidden = !item.finalUrl || !compareMode;
+
+    if (item.finalUrl) {
+      resultImage.src = item.finalUrl;
+      afterImage.src = item.finalUrl;
+      compareButton.textContent = compareMode ? "結果だけ見る" : "比較を見る";
+      updateCompareSlider();
+    } else {
+      resultImage.removeAttribute("src");
+      afterImage.removeAttribute("src");
+      compareButton.textContent = "比較を見る";
+    }
+  }
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[char]);
+  }
+
+  function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function waitForRateSlot() {
+    while (true) {
+      const now = Date.now();
+      requestTimestamps = requestTimestamps.filter((time) => now - time < RATE_LIMIT_WINDOW_MS);
+      if (requestTimestamps.length < RATE_LIMIT_COUNT) {
+        requestTimestamps.push(now);
+        return;
+      }
+      const waitMs = RATE_LIMIT_WINDOW_MS - (now - requestTimestamps[0]) + 300;
+      processingText.textContent = `API制限に合わせて待機中 ${Math.ceil(waitMs / 1000)}秒`;
+      await wait(Math.min(waitMs, 5000));
+    }
+  }
+
+  async function processItems() {
+    if (!endpoint()) {
+      setGlobalError("API URL が未設定です。config.js を確認してください。");
+      return;
+    }
+
+    setBusy(true, "処理中");
+    const processable = items.filter((item) => item.status === "queued");
+
+    for (let index = 0; index < processable.length; index += 1) {
+      const item = processable[index];
+      activeId = item.id;
+      item.status = "processing";
+      item.progressLabel = `${index + 1} / ${processable.length} 背景削除中`;
+      renderAll();
+
+      try {
+        await waitForRateSlot();
+        item.removedBlob = await callRemoveBackground(item.file);
+        item.progressLabel = "画像を整形中";
+        renderAll();
+        await renderFinalImage(item);
+        item.status = "done";
+        item.progressLabel = "完了";
+      } catch (error) {
+        item.status = "failed";
+        item.error = error.message || String(error);
+      }
+
+      renderAll();
+    }
+
+    setBusy(false);
+    renderAll();
+  }
+
+  async function callRemoveBackground(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(endpoint(), {
+      method: "POST",
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    if (blob.type && blob.type !== "image/png") {
+      throw new Error("APIからPNG以外のデータが返されました。");
+    }
+    return blob;
+  }
+
+  async function renderFinalImage(item) {
+    if (!item.removedBlob) return;
+    const final = await transformImage(item.removedBlob, settings());
+    if (item.finalUrl) URL.revokeObjectURL(item.finalUrl);
+    item.finalBlob = final.blob;
+    item.finalUrl = URL.createObjectURL(final.blob);
+    item.outputName = makeCleanName(item.file.name, final.format);
+  }
+
+  async function transformImage(blob, s) {
+    const bitmap = await createImageBitmap(blob);
+    workCanvas.width = bitmap.width;
+    workCanvas.height = bitmap.height;
+    workContext.clearRect(0, 0, workCanvas.width, workCanvas.height);
+    workContext.drawImage(bitmap, 0, 0);
+    bitmap.close();
+
+    const imageData = workContext.getImageData(0, 0, workCanvas.width, workCanvas.height);
+    applyAlphaAdjustments(imageData, s);
+    workContext.putImageData(imageData, 0, 0);
+
+    const bounds = findAlphaBounds(imageData) || {
+      x: 0,
+      y: 0,
+      width: workCanvas.width,
+      height: workCanvas.height
+    };
+
+    const longest = Math.max(bounds.width, bounds.height);
+    const padding = Math.round(longest * MARGIN_RATIO[s.margin]);
+    const contentWidth = bounds.width + padding * 2;
+    const contentHeight = bounds.height + padding * 2;
+    const outputWidth = s.center ? Math.max(contentWidth, contentHeight) : contentWidth;
+    const outputHeight = s.center ? Math.max(contentWidth, contentHeight) : contentHeight;
+    const drawX = Math.round((outputWidth - bounds.width) / 2);
+    const drawY = Math.round((outputHeight - bounds.height) / 2);
+
+    outputCanvas.width = Math.max(1, outputWidth);
+    outputCanvas.height = Math.max(1, outputHeight);
+    outputContext.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+
+    const bg = s.format === "jpeg" && s.background === "transparent" ? "white" : s.background;
+    if (bg !== "transparent") {
+      outputContext.fillStyle = bg === "black" ? "#111827" : "#ffffff";
+      outputContext.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+    }
+
+    outputContext.drawImage(
+      workCanvas,
+      bounds.x,
+      bounds.y,
+      bounds.width,
+      bounds.height,
+      drawX,
+      drawY,
+      bounds.width,
+      bounds.height
     );
 
-    for (let index = 3; index < adjusted.data.length; index += 4) {
-      let alpha = adjusted.data[index];
-      if (alpha <= cutoff) {
+    const type = s.format === "jpeg" ? "image/jpeg" : "image/png";
+    const finalBlob = await canvasToBlob(outputCanvas, type, 0.92);
+    return { blob: finalBlob, format: s.format };
+  }
+
+  function applyAlphaAdjustments(imageData, s) {
+    const data = imageData.data;
+    const contrast = s.edgeContrast / 100;
+    for (let index = 3; index < data.length; index += 4) {
+      let alpha = data[index];
+      if (alpha <= s.alphaCutoff) {
         alpha = 0;
       } else if (contrast > 0) {
         const normalized = alpha / 255;
         const sharpened = (normalized - 0.5) * (1 + contrast * 1.8) + 0.5;
         alpha = Math.max(0, Math.min(255, Math.round(sharpened * 255)));
       }
-      adjusted.data[index] = alpha;
+      data[index] = alpha;
+    }
+  }
+
+  function findAlphaBounds(imageData) {
+    const { width, height, data } = imageData;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const alpha = data[(y * width + x) * 4 + 3];
+        if (alpha > 8) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      }
     }
 
-    context.putImageData(adjusted, 0, 0);
-    return new Promise((resolve) => {
+    if (maxX < minX || maxY < minY) return null;
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1
+    };
+  }
+
+  function canvasToBlob(canvas, type, quality) {
+    return new Promise((resolve, reject) => {
       canvas.toBlob((blob) => {
-        if (!blob) {
-          resolve();
-          return;
-        }
-        if (adjustedUrl) URL.revokeObjectURL(adjustedUrl);
-        adjustedUrl = URL.createObjectURL(blob);
-        resultBlob = blob;
-        resultImage.src = adjustedUrl;
-        resultImage.hidden = false;
-        resultBadge.textContent = "調整できます";
-        downloadButton.disabled = false;
-        resolve();
-      }, "image/png");
+        if (blob) resolve(blob);
+        else reject(new Error("画像の変換に失敗しました。"));
+      }, type, quality);
     });
   }
 
-  async function removeBackground(file) {
-    const validationError = validateFile(file);
-    if (validationError) {
-      setMessage(validationError, "error");
+  async function rerenderSuccessItems() {
+    const doneItems = successfulItems();
+    if (!doneItems.length) {
+      refreshOutputSummary();
       return;
     }
 
-    const endpoint = getEndpoint();
-    if (!endpoint) {
-      setMessage("API URL が未設定です。管理者に確認してください。", "error");
+    setBusy(true, "設定を反映中");
+    for (const item of doneItems) {
+      await renderFinalImage(item);
+    }
+    setBusy(false);
+    renderAll();
+  }
+
+  function updateCompareSlider() {
+    const value = Number(compareSlider.value);
+    afterClip.style.width = `${value}%`;
+    compareHandle.style.left = `${value}%`;
+  }
+
+  function setGlobalError(text) {
+    progressText.textContent = text;
+    failureList.hidden = false;
+    failureList.innerHTML = `<strong>確認が必要です</strong><span>${escapeHtml(text)}</span>`;
+  }
+
+  async function saveOutput() {
+    const successes = successfulItems();
+    if (!successes.length) return;
+
+    if (successes.length === 1) {
+      downloadBlob(successes[0].finalBlob, successes[0].outputName);
       return;
     }
 
-    showOriginal(file);
-    resultFileName = makeDownloadName(file.name);
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    setBusy(true);
-    setMessage("元画像を表示しました。背景を削除しています。", "");
-
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      if (blob.type && blob.type !== "image/png") {
-        throw new Error("APIからPNG以外のデータが返されました。");
-      }
-
-      await captureSourceImageData(blob);
-      await applyAdjustments();
-      adjustPanel.hidden = false;
-      setMessage("透過PNGを作成しました。必要なら仕上げ調整をしてください。", "success");
-    } catch (error) {
-      resultBadge.textContent = "失敗";
-      setMessage(`処理に失敗しました: ${error.message}`, "error");
-    } finally {
-      setBusy(false);
+    if (!window.JSZip) {
+      setGlobalError("ZIP保存ライブラリを読み込めませんでした。ネットワークを確認してください。");
+      return;
     }
+
+    const zip = new window.JSZip();
+    successes.forEach((item) => {
+      zip.file(item.outputName, item.finalBlob);
+    });
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    downloadBlob(zipBlob, "cleaned_images.zip");
+  }
+
+  function downloadBlob(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function handleFiles(files) {
+    if (!files.length) return;
+    createItems(files);
+    processItems();
   }
 
   selectButton.addEventListener("click", () => fileInput.click());
@@ -205,57 +590,60 @@
       fileInput.click();
     }
   });
-
-  fileInput.addEventListener("change", () => {
-    removeBackground(fileInput.files[0]);
-    fileInput.value = "";
-  });
-
   dropZone.addEventListener("dragover", (event) => {
     event.preventDefault();
     dropZone.classList.add("dragging");
   });
-
   dropZone.addEventListener("dragleave", () => {
     dropZone.classList.remove("dragging");
   });
-
   dropZone.addEventListener("drop", (event) => {
     event.preventDefault();
     dropZone.classList.remove("dragging");
-    removeBackground(event.dataTransfer.files[0]);
+    handleFiles(event.dataTransfer.files);
+  });
+  fileInput.addEventListener("change", () => {
+    handleFiles(fileInput.files);
+    fileInput.value = "";
   });
 
-  downloadButton.addEventListener("click", () => {
-    if (!resultBlob) return;
-    const link = document.createElement("a");
-    link.href = adjustedUrl;
-    link.download = resultFileName;
-    link.click();
-  });
-
-  alphaCutoff.addEventListener("input", () => {
-    updateSliderLabels();
-    applyAdjustments();
-  });
-
-  edgeContrast.addEventListener("input", () => {
-    updateSliderLabels();
-    applyAdjustments();
-  });
-
-  resetAdjustButton.addEventListener("click", () => {
-    resetAdjustments();
-    applyAdjustments();
-  });
-
-  bgButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      bgButtons.forEach((item) => item.classList.remove("active"));
-      button.classList.add("active");
-      previewStage.className = `preview-stage ${button.dataset.previewBg}`;
+  presetButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      setPreset(button.dataset.preset);
+      await rerenderSuccessItems();
     });
   });
 
-  updateSliderLabels();
+  [outputBackground, marginSize, outputFormat, alphaCutoff, edgeContrast].forEach((control) => {
+    control.addEventListener("input", async () => {
+      markCustom();
+      updateLabels();
+      refreshOutputSummary();
+      await rerenderSuccessItems();
+    });
+  });
+
+  centerObject.addEventListener("change", async () => {
+    markCustom();
+    refreshOutputSummary();
+    await rerenderSuccessItems();
+  });
+
+  saveButton.addEventListener("click", saveOutput);
+  compareButton.addEventListener("click", () => {
+    compareMode = !compareMode;
+    renderActive();
+  });
+  compareSlider.addEventListener("input", updateCompareSlider);
+
+  viewBgButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      viewBgButtons.forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      resultStage.className = `result-stage ${button.dataset.viewBg}`;
+    });
+  });
+
+  setPreset("ppt");
+  renderAll();
 })();

@@ -1,19 +1,39 @@
-# 背景削除ツール
+# Product Photo Cleaner
 
-GitHub Pages で公開する単機能フロントと、Cloud Run で動かす `rembg` ベースの背景削除 API です。
+製品写真・部品写真・工具写真・治具写真を、プレゼン資料、作業標準書、QC資料などに貼りやすい画像へ整えるWebツールです。
+
+フロントエンドは GitHub Pages で公開する静的Webアプリ、背景除去処理は Cloud Run 上の Python API で実行します。
+
+## 主な機能
+
+- 背景除去
+- 自動余白除去
+- 中央配置
+- 背景色切替: 透明 / 白 / 黒
+- 用途別プリセット
+- Before / After 比較スライダー
+- PNG / JPEG 保存
+- 複数画像の直列一括処理
+- ZIPダウンロード
+
+## 用途プリセット
+
+- PowerPoint資料: 透過PNG、余白少なめ、中央配置
+- 作業標準書: 白背景、余白中、中央配置
+- QCレポート: 白背景、余白中、中央配置
+- 部品写真: 白背景を初期値にし、黒背景表示でも確認しやすい設定
+- カスタム: 背景、余白、出力形式、フチ除去、輪郭補正を手動設定
 
 ## 構成
 
-- `index.html` / `styles.css` / `app.js`: GitHub Pages 用の静的フロント
-- `config.js`: Cloud Run API URL の初期値
+- `index.html` / `styles.css` / `app.js`: GitHub Pages 用フロント
+- `config.js`: Cloud Run API URL
 - `api/`: Cloud Run 用 FastAPI アプリ
 - `.github/workflows/pages.yml`: GitHub Pages デプロイ
 
-## フロントの公開
+## API
 
-このフォルダーを独立リポジトリとして GitHub に push すると、`main` ブランチへの push で GitHub Pages にデプロイされます。
-
-Cloud Run の URL が確定したら `config.js` を更新します。
+背景除去APIは既存の `/remove-background` を使います。
 
 ```js
 window.BACKGROUND_REMOVER_CONFIG = {
@@ -21,7 +41,13 @@ window.BACKGROUND_REMOVER_CONFIG = {
 };
 ```
 
-画面上の API URL 入力欄に入れて保存することもできます。
+## 制限
+
+- 入力: PNG / JPG / JPEG
+- 最大サイズ: 1ファイル 5MB
+- 出力: PNG / JPEG
+- アップロード画像は保存しません
+- 複数画像はAPI負荷を避けるため1枚ずつ直列処理します
 
 ## Cloud Run API
 
@@ -43,21 +69,15 @@ gcloud run deploy background-remover-api \
   --region asia-northeast1 \
   --allow-unauthenticated \
   --set-env-vars ALLOWED_ORIGINS=https://YOUR_USER.github.io \
-  --memory 1Gi \
+  --memory 2Gi \
   --cpu 1 \
   --max-instances 1
 ```
 
-API エンドポイントは `/remove-background` です。
+`rembg` の初回モデル読み込みが重い場合があるため、メモリは `2Gi` を推奨します。
 
-## 制限
+## GitHub Pages
 
-- 入力: PNG / JPG / JPEG
-- 最大サイズ: 5MB
-- 利用回数: 1分あたり3回
-- 出力: 透過 PNG
-- アップロード画像は保存しません
+`main` ブランチへ push すると GitHub Actions で Pages 用ファイルが公開されます。
 
-## Tools ポータルへの追加
-
-GitHub Pages の URL が決まったら、既存 Tools ポータルにリンクを追加してください。
+Tools ポータルには、公開後の GitHub Pages URL を追加してください。
