@@ -27,6 +27,9 @@ const exportBackground = document.getElementById("exportBackground");
 const zoomOutButton = document.getElementById("zoomOutButton");
 const zoomResetButton = document.getElementById("zoomResetButton");
 const zoomInButton = document.getElementById("zoomInButton");
+const rotateLeftButton = document.getElementById("rotateLeftButton");
+const rotateAngleLabel = document.getElementById("rotateAngleLabel");
+const rotateRightButton = document.getElementById("rotateRightButton");
 const copyButton = document.getElementById("copyButton");
 const saveButton = document.getElementById("saveButton");
 const viewport = document.getElementById("canvasViewport");
@@ -45,6 +48,7 @@ const tempCtx = tempCanvas.getContext("2d", { willReadFrequently: true });
 let state = null;
 let currentTool = "toggle";
 let previewMode = "compare";
+let rotationAngle = 0;
 let zoom = 1;
 let panX = 0;
 let panY = 0;
@@ -75,7 +79,7 @@ function updateCanvasCursor() {
 }
 
 function setControlsEnabled(enabled) {
-  [relabelButton, zoomOutButton, zoomResetButton, zoomInButton, copyButton, saveButton].forEach((button) => {
+  [relabelButton, zoomOutButton, zoomResetButton, zoomInButton, rotateLeftButton, rotateRightButton, copyButton, saveButton].forEach((button) => {
     button.disabled = !enabled;
   });
   updateHistoryButtons();
@@ -106,6 +110,8 @@ async function loadFile(file) {
       width: prepared.imageData.width,
       height: prepared.imageData.height
     };
+    rotationAngle = 0;
+    rotateAngleLabel.textContent = "0°";
 
     sizeCanvases(state.width, state.height);
     setStatus("ブラウザ内モデルで背景を削除しています。初回は少し時間がかかります。", 24);
@@ -469,6 +475,84 @@ function zoomAtViewportPoint(viewportX, viewportY, nextZoom) {
   applyTransform();
 }
 
+function rotateCurrentImage(degrees) {
+  if (!state) return;
+  clearPolygon();
+  const rotatedOriginal = rotateImageData(state.originalImageData, degrees, true);
+  const rotatedConfidence = rotateAlphaArray(state.confidenceMap, state.width, state.height, degrees, true);
+  const rotatedMask = rotateAlphaArray(state.alphaMask, state.width, state.height, degrees, true);
+  state.originalImageData = rotatedOriginal.imageData;
+  state.confidenceMap = rotatedConfidence.alpha;
+  state.alphaMask = rotatedMask.alpha.map((alpha) => (alpha >= 128 ? 255 : 0));
+  state.width = rotatedOriginal.width;
+  state.height = rotatedOriginal.height;
+  state.history = [];
+  state.redo = [];
+  rotationAngle = normalizeAngle(rotationAngle + degrees);
+  rotateAngleLabel.textContent = `${rotationAngle}°`;
+  sizeCanvases(state.width, state.height);
+  relabel();
+  resetView();
+  renderAll();
+  updateHistoryButtons();
+  setStatus(`${degrees > 0 ? "右" : "左"}に1°回転しました。`);
+}
+
+function rotateImageData(imageData, degrees, smooth) {
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = imageData.width;
+  sourceCanvas.height = imageData.height;
+  sourceCanvas.getContext("2d").putImageData(imageData, 0, 0);
+  const rotated = rotateCanvas(sourceCanvas, degrees, smooth);
+  const rotatedData = rotated.ctx.getImageData(0, 0, rotated.width, rotated.height);
+  return { imageData: rotatedData, width: rotated.width, height: rotated.height };
+}
+
+function rotateAlphaArray(alphaArray, width, height, degrees, smooth) {
+  const image = new ImageData(width, height);
+  for (let p = 0, i = 0; p < alphaArray.length; p += 1, i += 4) {
+    image.data[i] = 255;
+    image.data[i + 1] = 255;
+    image.data[i + 2] = 255;
+    image.data[i + 3] = alphaArray[p];
+  }
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = width;
+  sourceCanvas.height = height;
+  sourceCanvas.getContext("2d").putImageData(image, 0, 0);
+  const rotated = rotateCanvas(sourceCanvas, degrees, smooth);
+  const data = rotated.ctx.getImageData(0, 0, rotated.width, rotated.height).data;
+  const alpha = new Uint8ClampedArray(rotated.width * rotated.height);
+  for (let p = 0, i = 3; p < alpha.length; p += 1, i += 4) alpha[p] = data[i];
+  return { alpha, width: rotated.width, height: rotated.height };
+}
+
+function rotateCanvas(sourceCanvas, degrees, smooth) {
+  const radians = (degrees * Math.PI) / 180;
+  const sin = Math.abs(Math.sin(radians));
+  const cos = Math.abs(Math.cos(radians));
+  const width = Math.ceil(sourceCanvas.width * cos + sourceCanvas.height * sin);
+  const height = Math.ceil(sourceCanvas.width * sin + sourceCanvas.height * cos);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, width);
+  canvas.height = Math.max(1, height);
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = smooth;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(radians);
+  ctx.drawImage(sourceCanvas, -sourceCanvas.width / 2, -sourceCanvas.height / 2);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  return { canvas, ctx, width: canvas.width, height: canvas.height };
+}
+
+function normalizeAngle(angle) {
+  let normalized = Math.round(angle) % 360;
+  if (normalized > 180) normalized -= 360;
+  if (normalized <= -180) normalized += 360;
+  return normalized;
+}
+
 async function exportPng() {
   if (!state) return;
   const blob = await createOutputBlob(exportBackground.value);
@@ -724,6 +808,8 @@ clearPolygonButton.addEventListener("click", clearPolygon);
 zoomOutButton.addEventListener("click", () => zoomAtCenter(zoom / 1.25));
 zoomInButton.addEventListener("click", () => zoomAtCenter(zoom * 1.25));
 zoomResetButton.addEventListener("click", resetView);
+rotateLeftButton.addEventListener("click", () => rotateCurrentImage(-1));
+rotateRightButton.addEventListener("click", () => rotateCurrentImage(1));
 copyButton.addEventListener("click", copyTransparentPng);
 saveButton.addEventListener("click", exportPng);
 window.addEventListener("resize", () => {
