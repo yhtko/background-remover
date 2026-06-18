@@ -4,6 +4,7 @@ const MAX_DIMENSION = 1800;
 const HISTORY_LIMIT = 12;
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 10;
+const INITIAL_ALPHA_THRESHOLD = 128;
 
 const fileInput = document.getElementById("fileInput");
 const selectButton = document.getElementById("selectButton");
@@ -12,8 +13,6 @@ const statusText = document.getElementById("statusText");
 const progressBar = document.getElementById("progressBar");
 const toolButtons = document.querySelectorAll("[data-tool]");
 const previewButtons = document.querySelectorAll("[data-preview]");
-const thresholdSlider = document.getElementById("thresholdSlider");
-const thresholdValue = document.getElementById("thresholdValue");
 const showBoundary = document.getElementById("showBoundary");
 const labelInfo = document.getElementById("labelInfo");
 const undoButton = document.getElementById("undoButton");
@@ -49,7 +48,6 @@ let panX = 0;
 let panY = 0;
 let dragging = false;
 let rightButtonPanning = false;
-let dragStart = null;
 let lastPointer = null;
 let polygonPoints = [];
 
@@ -147,13 +145,12 @@ async function initializeMaskFromBlob(blob) {
   tempCtx.drawImage(bitmap, 0, 0, state.width, state.height);
   bitmap.close();
   const removed = tempCtx.getImageData(0, 0, state.width, state.height);
-  const threshold = Number(thresholdSlider.value);
   state.confidenceMap = new Uint8ClampedArray(state.width * state.height);
   state.alphaMask = new Uint8ClampedArray(state.width * state.height);
   for (let i = 0, p = 0; i < removed.data.length; i += 4, p += 1) {
     const alpha = removed.data[i + 3];
     state.confidenceMap[p] = alpha;
-    state.alphaMask[p] = alpha >= threshold ? 255 : 0;
+    state.alphaMask[p] = alpha >= INITIAL_ALPHA_THRESHOLD ? 255 : 0;
   }
 }
 
@@ -290,16 +287,6 @@ function highlightLabel(label) {
   interactionCtx.putImageData(image, 0, 0);
 }
 
-function drawSelectionRect(rect) {
-  renderInteraction();
-  if (!rect) return;
-  interactionCtx.fillStyle = "rgba(37, 99, 235, 0.16)";
-  interactionCtx.strokeStyle = "rgba(37, 99, 235, 0.95)";
-  interactionCtx.lineWidth = Math.max(1, 2 / zoom);
-  interactionCtx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  interactionCtx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-}
-
 function drawPolygonGuide() {
   updatePolygonButtons();
   if (!polygonPoints.length) return;
@@ -356,25 +343,6 @@ function toggleLabel(label) {
   relabel();
   renderAll();
   setStatus(info.kind === "fg" ? "選択した島を消しました。" : "選択した島を戻しました。");
-}
-
-function applyRectThreshold(rect) {
-  if (!state || !rect) return;
-  const x1 = clamp(Math.floor(Math.min(rect.x, rect.x + rect.w)), 0, state.width - 1);
-  const x2 = clamp(Math.ceil(Math.max(rect.x, rect.x + rect.w)), 0, state.width - 1);
-  const y1 = clamp(Math.floor(Math.min(rect.y, rect.y + rect.h)), 0, state.height - 1);
-  const y2 = clamp(Math.ceil(Math.max(rect.y, rect.y + rect.h)), 0, state.height - 1);
-  const threshold = Number(thresholdSlider.value);
-  pushHistory();
-  for (let y = y1; y <= y2; y += 1) {
-    for (let x = x1; x <= x2; x += 1) {
-      const p = y * state.width + x;
-      state.alphaMask[p] = state.confidenceMap[p] >= threshold ? 255 : 0;
-    }
-  }
-  relabel();
-  renderAll();
-  setStatus("選択範囲のしきい値を更新しました。");
 }
 
 function applyPolygon(mode) {
@@ -587,10 +555,6 @@ interactionCanvas.addEventListener("pointermove", (event) => {
     applyTransform();
     return;
   }
-  if (dragging && dragStart && currentTool === "threshold") {
-    drawSelectionRect({ x: dragStart.x, y: dragStart.y, w: point.x - dragStart.x, h: point.y - dragStart.y });
-    return;
-  }
   if (currentTool === "polyFg" || currentTool === "polyBg") {
     renderInteraction();
     if (polygonPoints.length) {
@@ -640,20 +604,13 @@ interactionCanvas.addEventListener("pointerdown", (event) => {
     dragging = false;
     return;
   }
-  if (currentTool === "threshold") dragStart = point;
 });
 
 interactionCanvas.addEventListener("pointerup", (event) => {
   if (!state) return;
-  if (dragging && dragStart && currentTool === "threshold") {
-    const point = canvasPoint(event);
-    const rect = { x: dragStart.x, y: dragStart.y, w: point.x - dragStart.x, h: point.y - dragStart.y };
-    if (Math.abs(rect.w) > 2 && Math.abs(rect.h) > 2) applyRectThreshold(rect);
-  }
   dragging = false;
   rightButtonPanning = false;
   updateCanvasCursor();
-  dragStart = null;
 });
 
 interactionCanvas.addEventListener("dblclick", () => {
@@ -665,16 +622,12 @@ interactionCanvas.addEventListener("pointercancel", () => {
   dragging = false;
   rightButtonPanning = false;
   updateCanvasCursor();
-  dragStart = null;
 });
 
 interactionCanvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
 });
 
-thresholdSlider.addEventListener("input", () => {
-  thresholdValue.textContent = thresholdSlider.value;
-});
 showBoundary.addEventListener("change", renderBoundary);
 undoButton.addEventListener("click", () => {
   if (!state || !state.history.length) return;
