@@ -123,13 +123,14 @@ h1 {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(310px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(310px, 380px) minmax(0, 1fr) auto;
   gap: 16px;
   align-items: start;
 }
 
 .sidebar,
-.workspace {
+.workspace,
+.history-sidebar {
   display: grid;
   gap: 14px;
   min-width: 0;
@@ -154,8 +155,62 @@ details.panel {
 }
 
 .history-drawer summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
   font-weight: 900;
+  list-style: none;
+}
+
+.history-drawer summary::-webkit-details-marker {
+  display: none;
+}
+
+.history-drawer summary::before {
+  content: "▶";
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-size: 11px;
+}
+
+.history-drawer[open] summary::before {
+  content: "▼";
+}
+
+.history-sidebar {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+}
+
+.history-panel {
+  width: min(360px, 24vw);
+  max-height: calc(100vh - 44px);
+  overflow: auto;
+  transition: width 0.18s ease;
+}
+
+.history-panel:not([open]) {
+  width: 48px;
+  min-height: 178px;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.history-panel:not([open]) summary {
+  writing-mode: vertical-rl;
+  min-height: 150px;
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
+.history-panel:not([open]) summary::before {
+  content: "◀";
 }
 
 .history-body {
@@ -321,9 +376,9 @@ details.panel {
 
 .history-item {
   display: grid;
-  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(88px, 112px) minmax(0, 1fr);
   gap: 8px;
-  align-items: center;
+  align-items: start;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -365,12 +420,11 @@ details.panel {
 }
 
 .history-actions {
-  grid-column: 3;
-  grid-row: 1 / span 2;
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  min-width: 220px;
+  min-width: 0;
 }
 
 .history-actions button {
@@ -575,6 +629,30 @@ details.panel {
 @media (max-width: 980px) {
   .layout {
     grid-template-columns: 1fr;
+  }
+
+  .history-sidebar {
+    position: static;
+  }
+
+  .history-panel,
+  .history-panel:not([open]) {
+    width: 100%;
+    max-height: none;
+  }
+
+  .history-panel:not([open]) {
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .history-panel:not([open]) summary {
+    writing-mode: horizontal-tb;
+    min-height: 0;
+  }
+
+  .history-panel:not([open]) summary::before {
+    content: "▶";
   }
 
   .topbar {
