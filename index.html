@@ -10,24 +10,31 @@
   <main class="app">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Factory Tools / Browser only</p>
-        <h1>Product Photo Cleaner</h1>
-        <p class="subtitle">画像をサーバーへ送らず、ブラウザ内で背景除去とマスク修正を行います。</p>
+        <p class="eyebrow" data-i18n="eyebrow">Factory Tools / Browser only</p>
+        <h1 data-i18n="title">Product Photo Cleaner</h1>
+        <p class="subtitle" data-i18n="subtitle">画像をサーバーへ送らず、ブラウザ内で背景除去とマスク修正を行います。</p>
       </div>
       <div class="canvas-output">
-        <select id="exportBackground" aria-label="書き出し背景">
-          <option value="transparent">透明PNG</option>
-          <option value="white">白背景PNG</option>
-          <option value="black">黒背景PNG</option>
-          <option value="gray">検査グレーPNG</option>
+        <select id="lang-select" aria-label="Language" title="Language">
+          <option value="ja">日本語</option>
+          <option value="en">English</option>
+          <option value="th">ภาษาไทย</option>
+          <option value="id">Bahasa Indonesia</option>
+          <option value="zh">中文</option>
         </select>
-        <select id="outputSize" aria-label="コピー/保存サイズ">
-          <option value="high">高画質</option>
-          <option value="standard" selected>標準</option>
-          <option value="light">軽量</option>
+        <select id="exportBackground" data-i18n-aria="exportBg_transparent">
+          <option value="transparent" data-i18n="exportBg_transparent">透明PNG</option>
+          <option value="white" data-i18n="exportBg_white">白背景PNG</option>
+          <option value="black" data-i18n="exportBg_black">黒背景PNG</option>
+          <option value="gray" data-i18n="exportBg_gray">検査グレーPNG</option>
         </select>
-        <button id="copyButton" type="button" disabled>コピー</button>
-        <button id="saveButton" type="button" disabled>PNG保存</button>
+        <select id="outputSize" data-i18n-aria="size_standard">
+          <option value="high" data-i18n="size_high">高画質</option>
+          <option value="standard" selected data-i18n="size_standard">標準</option>
+          <option value="light" data-i18n="size_light">軽量</option>
+        </select>
+        <button id="copyButton" type="button" disabled data-i18n="btnCopy">コピー</button>
+        <button id="saveButton" type="button" disabled data-i18n="btnSave">PNG保存</button>
       </div>
     </header>
 
@@ -36,42 +43,42 @@
         <section class="panel upload-panel">
           <div id="dropZone" class="drop-zone" tabindex="0">
             <input id="fileInput" type="file" accept="image/png,image/jpeg" hidden>
-            <strong>画像をアップロード</strong>
-            <span>PNG / JPG / JPEG。初回のみモデルをダウンロードします。</span>
-            <button id="selectButton" type="button">ファイルを選択</button>
+            <strong data-i18n="uploadTitle">画像をアップロード</strong>
+            <span data-i18n="uploadHint">PNG / JPG / JPEG。初回のみモデルをダウンロードします。</span>
+            <button id="selectButton" type="button" data-i18n="btnSelect">ファイルを選択</button>
           </div>
-          <div id="statusText" class="status-text">画像はまだ選択されていません。</div>
+          <div id="statusText" class="status-text" data-i18n="statusInit">画像はまだ選択されていません。</div>
           <div class="progress-track"><div id="progressBar"></div></div>
         </section>
 
         <section class="panel">
           <div class="panel-title">
-            <strong>マスク修正</strong>
-            <span id="labelInfo">島: -</span>
+            <strong data-i18n="maskTitle">マスク修正</strong>
+            <span id="labelInfo" data-i18n="islandLabel">島: -</span>
           </div>
-          <p class="tool-help">消えた部品は「点で囲んで戻す」で外周をクリックし、キャンバス内の「囲みを実行」で戻します。余計な背景は「点で囲んで消す」で同じように消せます。</p>
+          <p class="tool-help" data-i18n="toolHelp">消えた部品は「点で囲んで戻す」で外周をクリックし、キャンバス内の「囲みを実行」で戻します。余計な背景は「点で囲んで消す」で同じように消せます。</p>
           <div class="tool-grid">
-            <button type="button" data-tool="toggle">島を切替</button>
-            <button type="button" data-tool="polyFg">点で囲んで戻す</button>
-            <button type="button" data-tool="polyBg">点で囲んで消す</button>
-            <button type="button" class="active" data-tool="pan">パン</button>
+            <button type="button" data-tool="toggle" data-i18n="tool_toggle">島を切替</button>
+            <button type="button" data-tool="polyFg" data-i18n="tool_polyFg">点で囲んで戻す</button>
+            <button type="button" data-tool="polyBg" data-i18n="tool_polyBg">点で囲んで消す</button>
+            <button type="button" class="active" data-tool="pan" data-i18n="tool_pan">パン</button>
           </div>
 
           <label class="check-row">
             <input id="showBoundary" type="checkbox" checked>
-            <span>境界線を表示</span>
+            <span data-i18n="showBoundaryLabel">境界線を表示</span>
           </label>
 
           <div class="action-row">
-            <button id="undoButton" type="button" disabled>Undo</button>
-            <button id="redoButton" type="button" disabled>Redo</button>
-            <button id="relabelButton" type="button" disabled>島を再計算</button>
+            <button id="undoButton" type="button" disabled data-i18n="btnUndo">Undo</button>
+            <button id="redoButton" type="button" disabled data-i18n="btnRedo">Redo</button>
+            <button id="relabelButton" type="button" disabled data-i18n="btnRelabel">島を再計算</button>
           </div>
         </section>
 
         <section class="panel note-panel">
-          <strong>ネットワークについて</strong>
-          <p>画像データは送信しません。モデルファイルの初回ダウンロードのみ通信が発生します。</p>
+          <strong data-i18n="netTitle">ネットワークについて</strong>
+          <p data-i18n="netNote">画像データは送信しません。モデルファイルの初回ダウンロードのみ通信が発生します。</p>
         </section>
 
       </aside>
@@ -81,25 +88,25 @@
 
         <div id="canvasViewport" class="canvas-viewport checker">
 
-          <div class="view-switch" aria-label="表示切替">
-            <button type="button" class="active" data-preview="compare">元画像 + 結果</button>
-            <button type="button" data-preview="checker">結果のみ</button>
-            <button type="button" data-preview="original">元画像</button>
+          <div class="view-switch" data-i18n-aria="preview_compare">
+            <button type="button" class="active" data-preview="compare" data-i18n="preview_compare">元画像 + 結果</button>
+            <button type="button" data-preview="checker" data-i18n="preview_checker">結果のみ</button>
+            <button type="button" data-preview="original" data-i18n="preview_original">元画像</button>
           </div>
 
           <div id="canvasActions" class="canvas-actions" hidden>
-            <button id="applyPolygonButton" type="button" disabled>囲みを実行</button>
-            <button id="undoPointButton" type="button" disabled>点を戻す</button>
-            <button id="clearPolygonButton" type="button" disabled>囲みをクリア</button>
+            <button id="applyPolygonButton" type="button" disabled data-i18n="btnApplyPolygon">囲みを実行</button>
+            <button id="undoPointButton" type="button" disabled data-i18n="btnUndoPoint">点を戻す</button>
+            <button id="clearPolygonButton" type="button" disabled data-i18n="btnClearPolygon">囲みをクリア</button>
           </div>
 
-          <div class="canvas-zoom" aria-label="ズーム操作">
+          <div class="canvas-zoom" data-i18n-aria="btnZoomReset">
             <button id="zoomOutButton" type="button" disabled>-</button>
-            <button id="zoomResetButton" type="button" disabled>全体表示</button>
+            <button id="zoomResetButton" type="button" disabled data-i18n="btnZoomReset">全体表示</button>
             <button id="zoomInButton" type="button" disabled>+</button>
           </div>
 
-          <div class="canvas-rotate" aria-label="回転操作">
+          <div class="canvas-rotate" data-i18n-aria="preview_original">
             <button type="button" data-rotate="-90" disabled>-90°</button>
             <button type="button" data-rotate="-45" disabled>-45°</button>
             <button type="button" data-rotate="-1" disabled>-1°</button>
@@ -115,8 +122,8 @@
             <canvas id="interactionCanvas"></canvas>
           </div>
           <div id="emptyState" class="empty-state">
-            <strong>完全ブラウザ内で処理</strong>
-            <span>画像を選ぶと、ブラウザ内で背景除去モデルを実行します。</span>
+            <strong data-i18n="emptyTitle">完全ブラウザ内で処理</strong>
+            <span data-i18n="emptyHint">画像を選ぶと、ブラウザ内で背景除去モデルを実行します。</span>
           </div>
         </div>
 
@@ -124,14 +131,14 @@
 
       <aside class="history-sidebar">
         <details class="panel history-panel history-drawer">
-          <summary>履歴</summary>
+          <summary data-i18n="historyTitle">履歴</summary>
           <div class="history-body">
             <div class="panel-title">
-              <button id="clearHistoryButton" type="button">全削除</button>
+              <button id="clearHistoryButton" type="button" data-i18n="btnClearHistory">全削除</button>
             </div>
             <input id="historyEnabled" type="checkbox" checked hidden>
             <div id="historyList" class="history-list"></div>
-            <p id="historyEmpty" class="empty-note">履歴はまだありません。</p>
+            <p id="historyEmpty" class="empty-note" data-i18n="historyEmpty">履歴はまだありません。</p>
           </div>
         </details>
       </aside>

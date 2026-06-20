@@ -1,4 +1,5 @@
 import { removeBackground } from "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.6.0/+esm";
+import { t, applyLanguage, initI18n } from "./i18n.js";
 
 const MAX_DIMENSION = 1800;
 const HISTORY_LIMIT = 12;
@@ -113,13 +114,13 @@ function setControlsEnabled(enabled) {
 
 async function loadFile(file) {
   if (!file || !/^image\/(png|jpeg)$/.test(file.type)) {
-    showToast("PNG / JPG / JPEG を選択してください。");
+    showToast(t("toast_invalidFile"));
     return;
   }
 
   setControlsEnabled(false);
   clearPolygon();
-  setStatus("画像を読み込んでいます。", 8);
+  setStatus(t("status_loading"), 8);
 
   try {
     const prepared = await prepareImage(file);
@@ -139,9 +140,9 @@ async function loadFile(file) {
     rotateAngleLabel.textContent = "0°";
 
     sizeCanvases(state.width, state.height);
-    setStatus("ブラウザ内モデルで背景を削除しています。", 24);
+    setStatus(t("status_removing"), 24);
     const removedBlob = await removeBackground(prepared.blob);
-    setStatus("マスクを作成しています。", 74);
+    setStatus(t("status_masking"), 74);
     await initializeMaskFromBlob(removedBlob);
     relabel();
     await nextFrame();
@@ -149,12 +150,12 @@ async function loadFile(file) {
     renderAll();
     setControlsEnabled(true);
     setTool("pan");
-    setStatus("処理完了", 100);
-    showToast("背景削除が完了しました。");
+    setStatus(t("status_done"), 100);
+    showToast(t("toast_bgRemoved"));
   } catch (error) {
     console.error(error);
-    setStatus("処理に失敗しました。", 0);
-    showToast(`処理に失敗しました: ${error.message || error}`);
+    setStatus(t("toast_failed"), 0);
+    showToast(`${t("toast_failed")}: ${error.message || error}`);
   }
 }
 
@@ -243,7 +244,7 @@ function relabel() {
 
   state.labelMap = labelMap;
   state.labels = labels;
-  labelInfo.textContent = `島: ${labels.length - 1}`;
+  labelInfo.textContent = t("island_count").replace("{n}", labels.length - 1);
 }
 
 function renderAll() {
@@ -369,7 +370,7 @@ function toggleLabel(label) {
   if (!info) return;
   const total = state.width * state.height;
   if (info.kind === "bg" && info.count > total * 0.35) {
-    showToast("大きな背景領域です。必要な部分だけ点で囲んで戻してください。");
+    showToast(t("toast_bigRegion"));
     return;
   }
   pushHistory();
@@ -379,7 +380,7 @@ function toggleLabel(label) {
   }
   relabel();
   renderAll();
-  showToast(info.kind === "fg" ? "選択した島を消しました。" : "選択した島を戻しました。");
+  showToast(info.kind === "fg" ? t("toast_islandRemoved") : t("toast_islandRestored"));
 }
 
 function applyPolygon(mode) {
@@ -400,7 +401,7 @@ function applyPolygon(mode) {
   relabel();
   renderAll();
   clearPolygon();
-  showToast(mode === "fg" ? "囲んだ内側をすべて戻しました。" : "囲んだ内側をすべて消しました。");
+  showToast(mode === "fg" ? t("toast_polyFg") : t("toast_polyBg"));
 }
 
 function polygonBounds(points) {
@@ -637,16 +638,16 @@ async function exportPng() {
   const blob = await createOutputBlob(exportBackground.value);
   downloadBlob(blob, cleanFileName(state.fileName));
   const saved = await saveBlobToHistory(blob, {
-    action: "PNG保存",
+    action: t("btnSave"),
     background: exportBackground.value
   });
-  showToast(saved ? "PNGを保存し、履歴に追加しました。" : "PNGを保存しました。");
+  showToast(saved ? t("toast_savedHistory") : t("toast_saved"));
 }
 
 async function copyTransparentPng() {
   if (!state) return;
   if (!navigator.clipboard || !window.ClipboardItem) {
-    showToast("このブラウザは画像コピーに対応していません。");
+    showToast(t("toast_noCopy"));
     return;
   }
   try {
@@ -655,13 +656,13 @@ async function copyTransparentPng() {
       new ClipboardItem({ "image/png": blob })
     ]);
     const saved = await saveBlobToHistory(blob, {
-      action: "コピー",
+      action: t("btnCopy"),
       background: "transparent"
     });
-    showToast(saved ? "コピーし、履歴に追加しました。" : "クリップボードへコピーしました。");
+    showToast(saved ? t("toast_copiedHistory") : t("toast_copied"));
   } catch (error) {
     console.error(error);
-    showToast("コピーに失敗しました。");
+    showToast(t("toast_copyFail"));
   }
 }
 
@@ -679,7 +680,7 @@ function cleanFileName(fileName) {
 }
 
 function openHistoryDb() {
-  if (!("indexedDB" in window)) return Promise.reject(new Error("このブラウザは履歴保存に対応していません。"));
+  if (!("indexedDB" in window)) return Promise.reject(new Error(t("toast_histNoSupport")));
   if (historyDbPromise) return historyDbPromise;
   historyDbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(HISTORY_DB_NAME, HISTORY_DB_VERSION);
@@ -750,7 +751,7 @@ async function saveBlobToHistory(blob, details) {
     return true;
   } catch (error) {
     console.error(error);
-    showToast("履歴保存に失敗しました。");
+    showToast(t("toast_histFail"));
     return false;
   }
 }
@@ -767,31 +768,31 @@ async function trimHistory() {
 async function deleteHistoryItem(id) {
   await historyTx("readwrite", (store) => store.delete(id));
   await renderHistory();
-  showToast("履歴を削除しました。");
+  showToast(t("toast_histDeleted"));
 }
 
 async function clearHistory() {
   await historyTx("readwrite", (store) => store.clear());
   await renderHistory();
-  showToast("履歴をすべて削除しました。");
+  showToast(t("toast_histCleared"));
 }
 
 async function copyHistoryItem(id) {
   if (!navigator.clipboard || !window.ClipboardItem) {
-    showToast("このブラウザは画像コピーに対応していません。");
+    showToast(t("toast_noCopy"));
     return;
   }
   const item = await getHistoryItem(id);
   if (!item) return;
   await navigator.clipboard.write([new ClipboardItem({ "image/png": item.blob })]);
-  showToast("履歴からコピーしました。");
+  showToast(t("toast_histCopied"));
 }
 
 async function saveHistoryItem(id) {
   const item = await getHistoryItem(id);
   if (!item) return;
   downloadBlob(item.blob, item.fileName);
-  showToast("履歴からPNGを保存しました。");
+  showToast(t("toast_histSaved"));
 }
 
 async function renderHistory() {
@@ -817,9 +818,9 @@ async function renderHistory() {
     const actions = document.createElement("div");
     actions.className = "history-actions";
     actions.innerHTML = `
-      <button type="button" data-history-action="copy">コピー</button>
-      <button type="button" data-history-action="save">保存</button>
-      <button type="button" data-history-action="delete">削除</button>
+      <button type="button" data-history-action="copy">${t("histActionCopy")}</button>
+      <button type="button" data-history-action="save">${t("histActionSave")}</button>
+      <button type="button" data-history-action="delete">${t("histActionDelete")}</button>
     `;
 
     row.append(preview, actions);
@@ -833,7 +834,7 @@ function revokeHistoryPreviewUrls() {
 }
 
 function formatDate(value) {
-  return new Intl.DateTimeFormat("ja-JP", {
+  return new Intl.DateTimeFormat(document.documentElement.lang || "ja", {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -847,13 +848,13 @@ function formatBytes(bytes) {
 }
 
 function backgroundLabel(value) {
-  const labels = {
-    transparent: "透明",
-    white: "白背景",
-    black: "黒背景",
-    gray: "検査グレー"
+  const map = {
+    transparent: "bg_transparent",
+    white:       "bg_white",
+    black:       "bg_black",
+    gray:        "bg_gray"
   };
-  return labels[value] || "透明";
+  return t(map[value] || "bg_transparent");
 }
 
 async function initializeHistory() {
@@ -862,7 +863,7 @@ async function initializeHistory() {
   if (!("indexedDB" in window)) {
     historyEnabled.disabled = true;
     clearHistoryButton.disabled = true;
-    historyEmpty.textContent = "このブラウザは履歴保存に対応していません。";
+    historyEmpty.textContent = t("toast_histNoSupport");
     return;
   }
   await renderHistory();
@@ -940,7 +941,7 @@ function canvasToBlob(canvas, type) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob) resolve(blob);
-      else reject(new Error("画像の変換に失敗しました。"));
+      else reject(new Error(t("toast_convertFail")));
     }, type);
   });
 }
@@ -1019,7 +1020,15 @@ viewport.addEventListener("pointermove", (event) => {
     const label = state.labelMap[point.y * state.width + point.x];
     highlightLabel(label);
     const info = state.labels[label];
-    labelInfo.textContent = info ? `島: ${label} / ${info.kind === "fg" ? "前景" : "背景"} / ${info.count}px` : "島: -";
+    if (info) {
+      const kind = info.kind === "fg" ? t("kind_fg") : t("kind_bg");
+      labelInfo.textContent = t("island_detail")
+        .replace("{id}", label)
+        .replace("{kind}", kind)
+        .replace("{px}", info.count);
+    } else {
+      labelInfo.textContent = t("island_none");
+    }
   }
 });
 
@@ -1081,7 +1090,7 @@ redoButton.addEventListener("click", redoMaskEdit);
 relabelButton.addEventListener("click", () => {
   relabel();
   renderAll();
-  showToast("島を再計算しました。");
+  showToast(t("toast_relabeled"));
 });
 applyPolygonButton.addEventListener("click", applyCurrentPolygon);
 undoPointButton.addEventListener("click", undoPolygonPoint);
@@ -1096,7 +1105,7 @@ copyButton.addEventListener("click", copyTransparentPng);
 saveButton.addEventListener("click", exportPng);
 historyEnabled.addEventListener("change", () => {
   localStorage.setItem(HISTORY_ENABLED_KEY, historyEnabled.checked ? "1" : "0");
-  showToast(historyEnabled.checked ? "履歴保存をONにしました。" : "履歴保存をOFFにしました。");
+  showToast(historyEnabled.checked ? t("toast_histOn") : t("toast_histOff"));
 });
 historyList.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-history-action]");
@@ -1143,5 +1152,11 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+const langSelect = document.getElementById("lang-select");
+if (langSelect) {
+  langSelect.addEventListener("change", () => applyLanguage(langSelect.value));
+}
+
+initI18n();
 registerServiceWorker();
 initializeHistory();
