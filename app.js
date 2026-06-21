@@ -644,29 +644,41 @@ async function exportPng() {
   showToast(saved ? t("toast_savedHistory") : t("toast_saved"));
 }
 
-async function copyTransparentPng() {
+function copyTransparentPng() {
   if (!state) return;
   if (!navigator.clipboard || !window.ClipboardItem) {
     showToast(t("toast_noCopy"));
     return;
   }
-  try {
-    // Safari requires ClipboardItem to receive a Promise directly — awaiting the
-    // blob first causes the user-gesture context to expire before write() is called.
-    const blobPromise = createOutputBlob("transparent");
-    await navigator.clipboard.write([
-      new ClipboardItem({ "image/png": blobPromise })
-    ]);
+  // Keep this function non-async so Safari's user-gesture context stays active
+  // when navigator.clipboard.write() is called synchronously below.
+  const blobPromise = createOutputBlob("transparent");
+  navigator.clipboard.write([
+    new ClipboardItem({ "image/png": blobPromise })
+  ]).then(async () => {
     const blob = await blobPromise;
     const saved = await saveBlobToHistory(blob, {
       action: t("btnCopy"),
       background: "transparent"
     });
     showToast(saved ? t("toast_copiedHistory") : t("toast_copied"));
-  } catch (error) {
-    console.error(error);
-    showToast(t("toast_copyFail"));
-  }
+  }).catch(async (error) => {
+    console.error("clipboard.write failed:", error);
+    // Fallback for browsers that don't support Promise-based ClipboardItem (older Safari):
+    // resolve the blob first then retry once.
+    try {
+      const blob = await blobPromise;
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      const saved = await saveBlobToHistory(blob, {
+        action: t("btnCopy"),
+        background: "transparent"
+      });
+      showToast(saved ? t("toast_copiedHistory") : t("toast_copied"));
+    } catch (fallbackError) {
+      console.error("clipboard fallback failed:", fallbackError);
+      showToast(t("toast_copyFail"));
+    }
+  });
 }
 
 function downloadBlob(blob, fileName) {
@@ -789,16 +801,29 @@ function itemToBlob(item) {
   return item.blob || new Blob([], { type: mime });
 }
 
-async function copyHistoryItem(id) {
+function copyHistoryItem(id) {
   if (!navigator.clipboard || !window.ClipboardItem) {
     showToast(t("toast_noCopy"));
     return;
   }
-  const item = await getHistoryItem(id);
-  if (!item) return;
-  const blob = itemToBlob(item);
-  await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-  showToast(t("toast_histCopied"));
+  // Non-async: call clipboard.write() synchronously to preserve Safari's user-gesture context.
+  const blobPromise = getHistoryItem(id).then(item => item ? itemToBlob(item) : null);
+  navigator.clipboard.write([
+    new ClipboardItem({ "image/png": blobPromise })
+  ]).then(() => {
+    showToast(t("toast_histCopied"));
+  }).catch(async (error) => {
+    console.error("clipboard.write failed:", error);
+    try {
+      const blob = await blobPromise;
+      if (!blob) return;
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      showToast(t("toast_histCopied"));
+    } catch (fallbackError) {
+      console.error("clipboard fallback failed:", fallbackError);
+      showToast(t("toast_copyFail"));
+    }
+  });
 }
 
 async function saveHistoryItem(id) {
@@ -1120,15 +1145,15 @@ historyEnabled.addEventListener("change", () => {
   localStorage.setItem(HISTORY_ENABLED_KEY, historyEnabled.checked ? "1" : "0");
   showToast(historyEnabled.checked ? t("toast_histOn") : t("toast_histOff"));
 });
-historyList.addEventListener("click", async (event) => {
+historyList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-history-action]");
   if (!button) return;
   const item = button.closest(".history-item");
   if (!item) return;
   const action = button.dataset.historyAction;
-  if (action === "copy") await copyHistoryItem(item.dataset.id);
-  if (action === "save") await saveHistoryItem(item.dataset.id);
-  if (action === "delete") await deleteHistoryItem(item.dataset.id);
+  if (action === "copy") copyHistoryItem(item.dataset.id);
+  if (action === "save") saveHistoryItem(item.dataset.id);
+  if (action === "delete") deleteHistoryItem(item.dataset.id);
 });
 clearHistoryButton.addEventListener("click", clearHistory);
 window.addEventListener("resize", () => {
